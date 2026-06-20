@@ -31,6 +31,17 @@ cd .. && colcon build --symlink-install
 colcon test && colcon test-result --verbose
 ```
 
+## Architecture
+
+Three concerns stack one on the next: `fm_description` is the foundation,
+`fm_control` adds the control layer, and the hardware abstraction lets the same
+control stack drive a mock, three simulators, or real hardware behind one
+`ros2_control` interface.
+
+![hardware](docs/diagrams/hardware.svg)
+
+Full diagrams and the design contract: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+
 ## Governance
 
 Owner-free-on-main — see [CONTRIBUTING.md](CONTRIBUTING.md) and
