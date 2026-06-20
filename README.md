@@ -1,27 +1,37 @@
-# fm_robot
+# fm-robot
 
-Robot layer for the fm_ros2 workspace. Groups the URDF description, the
-`ros2_control` controllers, and the sensor drivers — the packages that model and
-drive the physical robot. Split-ready: this whole group extracts cleanly into its
-own repo later.
+[![License: Proprietary](https://img.shields.io/badge/License-Proprietary-blue.svg)](LICENSE)
 
-## Sub-Packages
+Robot layer for First Motive's ROS2 stack. Groups the URDF description, the
+`ros2_control` controllers, and the sensor drivers — the packages that describe
+and drive the physical robot.
+
+Part of First Motive's ROS2 (Humble) stack. Builds standalone here; assembled
+with the other six package repos by
+[`fm-ros2`](https://github.com/first-motive/fm-ros2).
+
+## Packages
 
 | Package | Build | Role |
 |---------|-------|------|
-| [`fm_description`](fm_description/README.md) | ament_cmake | URDF/xacro robot model, meshes, and the `view_robot` launch |
-| [`fm_control`](fm_control/README.md) | ament_cmake | `ros2_control` controllers and the G1 SDK bridges (arm, hand, base) |
-| [`fm_sensors`](fm_sensors/README.md) | ament_python | Sensor driver nodes |
+| `fm_description` | ament_cmake | URDF/xacro, meshes, and Foxglove layouts for the robot |
+| `fm_control` | ament_cmake | `ros2_control` controllers and hardware wiring |
+| `fm_sensors` | ament_python | Sensor drivers |
+| `fm_robot` | ament_cmake | Metapackage tying the three together for a single install |
 
-## How the Pieces Connect
+## Standalone Build
 
-`fm_description` owns the robot model: the xacro that other packages include to get
-the URDF and the `ros2_control` tags. `fm_control` consumes that description to load
-controllers and bridges joint commands to the hardware SDK. `fm_sensors` publishes
-the sensor streams the rest of the stack consumes. See
-[docs/ARCHITECTURE.md](../docs/ARCHITECTURE.md) for the full system design.
+Clone into a colcon workspace's `src/`, pull dependencies, then build:
 
-## Build Type
+```bash
+mkdir -p ws/src && cd ws/src
+git clone https://github.com/first-motive/fm-robot.git
+vcs import < fm-robot/fm-robot.repos     # externals (OpenArm + Unitree descriptions)
+cd .. && colcon build --symlink-install
+colcon test && colcon test-result --verbose
+```
 
-`ament_cmake` metapackage (exec-depends on the three sub-packages). The package
-itself builds nothing; it ties the group together for a single install.
+## Governance
+
+Owner-free-on-main — see [CONTRIBUTING.md](CONTRIBUTING.md) and
+[`.github/CODEOWNERS`](.github/CODEOWNERS).
