@@ -1,6 +1,6 @@
 # fm-robot
 
-[![License: Proprietary](https://img.shields.io/badge/License-Proprietary-blue.svg)](LICENSE)
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 
 Robot layer for First Motive's ROS2 stack. Groups the URDF description, the
 `ros2_control` controllers, and the sensor drivers — the packages that describe
