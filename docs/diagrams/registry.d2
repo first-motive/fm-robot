@@ -1,0 +1,44 @@
+# The robot registry in fm_description. One entry per robot abstracts its
+# description source, variants, and mesh strategy; the viewer and launchers select
+# by robot:= and variant:=. Mesh handling differs: G1-D and SO101 ship flat URDF +
+# vendored STL, while OpenArm visual DAE meshes are converted to STL at build time.
+# Each block: robot (role), description + mesh detail (art).
+...@styles
+direction: right
+
+reg: "" {
+  grid-rows: 2
+  class: block
+  r: Robot Registry { class: role }
+  p: fm_description { class: pkg }
+}
+
+g1: "" {
+  grid-rows: 4
+  class: block
+  r: "g1_d (default)" { class: role }
+  a1: Unitree wheeled G1-D { class: art }
+  a2: "variants: g1_d · g1_29dof_rev_1_0" { class: art }
+  a3: flat URDF + vendored STL { class: art }
+}
+
+so: "" {
+  grid-rows: 3
+  class: block
+  r: so101 { class: role }
+  a1: LeRobot SO-ARM100 { class: art }
+  a2: flat URDF + vendored STL { class: art }
+}
+
+oa: "" {
+  grid-rows: 4
+  class: block
+  r: openarm { class: role }
+  a1: bimanual { class: art }
+  a2: "variants: right_arm · default_bimanual · *_with_pinch_gripper" { class: art }
+  a3: DAE → STL at build { class: art }
+}
+
+reg -> g1
+reg -> so
+reg -> oa

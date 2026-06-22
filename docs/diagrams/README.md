@@ -66,6 +66,8 @@ view_robot             robot state publishing — joint_state_publisher → robo
 control_robot          simulation — /robot_description + /cmd_vel → Sim control plugin → /joint_states · /tf
 control                ros2_control graph — controller_manager ↔ resource_manager → hardware interfaces
 hardware               sim_backend → {mock · mujoco · gazebo · isaac · real} → one ros2_control system interface
+xacro                  URDF composition — {robot}.sim.urdf.xacro → geometry + ros2_control.xacro → <hardware>
+registry               robot registry — fm_description abstracts g1_d · so101 · openarm (variants + mesh strategy)
 ```
 
 `hardware` is the architectural crux: everything above the `ros2_control` system

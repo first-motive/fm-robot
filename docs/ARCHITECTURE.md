@@ -106,17 +106,15 @@ The mock, mujoco, gazebo, and isaac plugins are provided by
 [`fm-sim`](https://github.com/first-motive/fm-sim); `real` binds OpenArm hardware
 vendored as an external. This repo defines the interface they all bind to.
 
-The xacro layering that makes this work:
+The xacro layering that makes this work: a per-robot `{robot}.sim.urdf.xacro`
+includes the geometry and the `{robot}.ros2_control.xacro`, and that second file
+holds the `<hardware>` block the `sim_backend` argument resolves.
 
-```
-openarm.sim.urdf.xacro          (top level)
-  ├─ openarm_description geometry + preset YAML   → links, joints, meshes
-  └─ openarm.ros2_control.xacro                   → one <ros2_control> per arm
-       └─ hardware block selected by sim_backend  → plugin above
-```
+![xacro](diagrams/xacro.svg)
 
-Because the swap happens at the `<hardware>` boundary, switching from MuJoCo to
-real hardware is a launch argument, not a code change.
+Source: [`diagrams/xacro.d2`](diagrams/xacro.d2). Because the swap happens at the
+`<hardware>` boundary (the dashed block, expanded in `hardware.d2`), switching
+from MuJoCo to real hardware is a launch argument, not a code change.
 
 ## Robot Registry
 
@@ -124,20 +122,9 @@ real hardware is a launch argument, not a code change.
 defines its description source, variants, and mesh strategy. The viewer and
 launchers select by `robot:=` and `variant:=`.
 
-```mermaid
-flowchart TD
-    reg[Robot Registry<br/>fm_description]
-    reg --> g1[g1_d · default<br/>Unitree wheeled G1-D]
-    reg --> so[so101<br/>LeRobot SO-ARM100]
-    reg --> oa[openarm<br/>bimanual]
+![registry](diagrams/registry.svg)
 
-    g1 --> g1v[variants: g1_d · g1_29dof_rev_1_0]
-    oa --> oav[variants: right_arm · default_bimanual ·<br/>*_with_pinch_gripper]
-
-    g1 -.flat URDF + STL.-> g1mesh[vendored meshes]
-    so -.flat URDF + STL.-> somesh[vendored meshes]
-    oa -.DAE → STL convert.-> oamesh[openarm_meshes/*.stl]
-```
+Source: [`diagrams/registry.d2`](diagrams/registry.d2).
 
 Mesh handling differs by source: G1-D and SO101 ship flat URDF + STL files
 vendored into the package, while OpenArm visual `.dae` meshes are converted to

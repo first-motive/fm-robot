@@ -1,0 +1,38 @@
+# How one robot URDF is composed. The top-level {robot}.sim.urdf.xacro (fm_control)
+# includes two things: the robot geometry (links, joints, meshes) and the
+# {robot}.ros2_control.xacro. That second file holds a <hardware> block whose
+# plugin is chosen by the sim_backend argument — the dashed block expands in
+# hardware.d2. Switching robot is the top file; switching sim/real is sim_backend.
+# Each block: role / package (pkg) / artifact (art).
+...@styles
+direction: down
+
+urdf: "" {
+  grid-rows: 3
+  class: block
+  r: Robot URDF { class: role }
+  p: fm_control { class: pkg }
+  a: "{g1·openarm·so101}.sim.urdf.xacro" { class: art }
+}
+
+geom: "" {
+  grid-rows: 3
+  class: block
+  r: Geometry { class: role }
+  p: "fm_description · openarm_description" { class: pkg }
+  a: "links · joints · meshes" { class: art }
+}
+
+r2c: "" {
+  grid-rows: 3
+  class: block
+  r: ros2_control { class: role }
+  p: fm_control { class: pkg }
+  a: "{robot}.ros2_control.xacro" { class: art }
+}
+
+hw: "<hardware> plugin\nsim_backend selects" { class: zoom }
+
+urdf -> geom: includes
+urdf -> r2c: includes
+r2c -> hw: "xacro:if sim_backend"
