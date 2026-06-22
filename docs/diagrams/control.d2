@@ -9,31 +9,33 @@
 ...@styles
 direction: right
 
-cmd: "/robot_controller/commands\ncmd_vel · joint_trajectory" { class: topic }
-js: /joint_states { class: topic }
-rd: /robot_description { class: topic }
+cmd: "/robot_controller/commands" { class: topic }
 
 ros2control: ROS2 Control {
   class: block
   cm: controller_manager {
     class: block
-    grid-rows: 2
     ctrl: robot_controller { class: node }
     jsb: joint_state_broadcaster { class: node }
   }
   rm: resource_manager {
     class: block
-    hw: "hardware_interfaces\nactuator · sensor" { class: node }
+    hw: "hardware_interfaces" { class: node }
   }
   cm <-> rm
 }
 
+hardware: "hardware" { class: zoom }
+js: /joint_states { class: topic }
 rsp: robot_state_publisher { class: node }
-hardware: "hardware\nsim · real" { class: zoom }
+rd: /robot_description { class: topic }
 
-cmd -> ros2control.cm.ctrl
+cmd -> ros2control.cm.ctrl: cmd_vel · joint_trajectory
+ros2control.rm.hw <-> hardware: actuator · sensor
 ros2control.cm.jsb -> js
 js -> rsp
 rsp -> rd
-rsp <-> ros2control.rm.hw
-ros2control.rm.hw <-> hardware
+
+# Invisible rank constraint: pushes the output column (js → rsp → rd) to the
+# right of the whole ROS2 Control block instead of overlapping its inner columns.
+ros2control -> js: { style.opacity: 0 }
