@@ -1,0 +1,16 @@
+# Where the robot model comes from. The description is authored as many split-up
+# URDF/xacro source files (links, joints, geometries); xacro processes them into
+# one URDF document; robot_state_publisher loads that and publishes it as the
+# /robot_description topic. Source is a cream document, xacro a basic block,
+# robot_state_publisher a plum node, the topic a cream pill.
+...@styles
+direction: right
+
+urdf: URDF { class: art; shape: page }
+xacro: xacro { class: block }
+rsp: robot_state_publisher { class: node }
+rd: /robot_description { class: topic }
+
+urdf -> xacro: split-up unprocessed files
+xacro -> rsp: single processed URDF
+rsp -> rd: URDF data

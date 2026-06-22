@@ -1,37 +1,19 @@
-# fm_description / view_robot.launch.py — ROS graph. Publishes robot state only:
-# joint_state_publisher turns panel commands into joint states; robot_state_publisher
-# turns those into TF + the URDF. A viz client (RViz or foxglove_bridge) subscribes
-# these topics, launched separately by the TUI or bringup — not here. Nodes are plum
-# boxes, topics cream pills. Arrow into a node = subscribe; out = publish.
-#
-# The vertical feed above robot_state_publisher shows where the robot model comes
-# from: a URDF source file (cream document) expanded by xacro (basic block) into the
-# robot description the node publishes. Links, joints, and geometries live here.
+# fm_description / view_robot.launch.py — ROS graph for publishing robot state.
+# joint_state_publisher turns panel commands into joint states;
+# robot_state_publisher turns those into TF and republishes the URDF. A viz client
+# (RViz or foxglove_bridge) subscribes these topics, launched separately. Nodes are
+# plum boxes, topics cream pills. Arrow into a node = subscribe; out = publish.
+# Where /robot_description itself comes from is the robot_state_publisher diagram.
 ...@styles
 direction: right
 
-jsp: joint_state_publisher { class: node }
-rsp: robot_state_publisher { class: node }
-
-# Model source stacked above rsp. Borderless grid so urdf -> xacro reads
-# top-to-bottom, then drops into rsp — while the rest flows left-to-right.
-model: "" {
-  grid-rows: 2
-  grid-gap: 40
-  style.fill: transparent
-  style.stroke: transparent
-  urdf: robot.urdf.xacro { class: art; shape: page }
-  xacro: xacro { class: block }
-  urdf -> xacro
-}
-
 jcmd: /joint_command { class: topic }
+jsp: "joint_state_publisher(_gui)" { class: node }
 js: /joint_states { class: topic }
+rsp: robot_state_publisher { class: node }
 tf: /tf { class: topic }
 tfs: /tf_static { class: topic }
 rd: /robot_description { class: topic }
-
-model.xacro -> rsp
 
 jcmd -> jsp
 jsp -> js
