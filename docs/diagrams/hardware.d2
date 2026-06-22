@@ -1,7 +1,8 @@
-# Level 3 (leaf) — hardware abstraction. The sim_backend arg selects the
-# <hardware> plugin behind one ros2_control system interface. Sim engines and
-# real hardware are interchangeable; everything above the interface is identical.
-# Each block: engine name (role), plugin type (art).
+# Level 3 (leaf) — hardware abstraction. sim_backend selects one <hardware>
+# plugin; all five implement the same ros2_control SystemInterface, so one line
+# runs in from Backend Select and one line out to the Control Interface.
+# Everything above the interface is identical. The five backend blocks nest
+# inside one Backends block. Each block: engine name (role), plugin class (art).
 ...@styles
 direction: right
 
@@ -11,36 +12,41 @@ arg: "" {
   r: Backend Select { class: role }
   a: sim_backend { class: art }
 }
-mock: "" {
-  grid-rows: 2
+
+backends: Backends {
   class: block
-  r: Mock { class: role }
-  a: GenericSystem { class: art }
+  mock: "" {
+    grid-rows: 2
+    class: block
+    r: Mock { class: role }
+    a: GenericSystem { class: art }
+  }
+  mujoco: "" {
+    grid-rows: 2
+    class: block
+    r: MuJoCo { class: role }
+    a: MujocoSystemInterface { class: art }
+  }
+  gazebo: "" {
+    grid-rows: 2
+    class: block
+    r: Gazebo { class: role }
+    a: GazeboSimSystem { class: art }
+  }
+  isaac: "" {
+    grid-rows: 2
+    class: block
+    r: Isaac { class: role }
+    a: TopicBasedSystem { class: art }
+  }
+  real: "" {
+    grid-rows: 2
+    class: block
+    r: Real { class: role }
+    a: SystemInterface { class: art }
+  }
 }
-mujoco: "" {
-  grid-rows: 2
-  class: block
-  r: MuJoCo { class: role }
-  a: MujocoSystemInterface { class: art }
-}
-gazebo: "" {
-  grid-rows: 2
-  class: block
-  r: Gazebo { class: role }
-  a: GazeboSimSystem { class: art }
-}
-isaac: "" {
-  grid-rows: 2
-  class: block
-  r: Isaac { class: role }
-  a: TopicBasedSystem { class: art }
-}
-real: "" {
-  grid-rows: 2
-  class: block
-  r: Real { class: role }
-  a: "OpenArmHW · g1 bridge" { class: art }
-}
+
 iface: "" {
   grid-rows: 2
   class: block
@@ -48,8 +54,4 @@ iface: "" {
   a: ros2_control system { class: art }
 }
 
-arg -> mock -> iface
-arg -> mujoco -> iface
-arg -> gazebo -> iface
-arg -> isaac -> iface
-arg -> real -> iface
+arg -> backends -> iface
