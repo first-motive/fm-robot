@@ -1,0 +1,39 @@
+# The ros2_control graph fm_bringup brings up. ROS2 Control is two managers:
+# controller_manager loads the controllers (robot_controller subscribes the command;
+# joint_state_broadcaster publishes /joint_states), resource_manager owns the
+# hardware_interfaces (actuator + sensor handles). The two managers exchange state
+# and commands; the hardware_interfaces bind to the actual hardware (sim or real,
+# expanded in the hardware diagram). robot_state_publisher turns /joint_states into
+# /robot_description. Nodes plum, topics cream pills, the dashed hardware block
+# expands in hardware.d2.
+...@styles
+direction: right
+
+cmd: "/robot_controller/commands\ncmd_vel · joint_trajectory" { class: topic }
+js: /joint_states { class: topic }
+rd: /robot_description { class: topic }
+
+ros2control: ROS2 Control {
+  class: block
+  cm: controller_manager {
+    class: block
+    grid-rows: 2
+    ctrl: robot_controller { class: node }
+    jsb: joint_state_broadcaster { class: node }
+  }
+  rm: resource_manager {
+    class: block
+    hw: "hardware_interfaces\nactuator · sensor" { class: node }
+  }
+  cm <-> rm
+}
+
+rsp: robot_state_publisher { class: node }
+hardware: "hardware\nsim · real" { class: zoom }
+
+cmd -> ros2control.cm.ctrl
+ros2control.cm.jsb -> js
+js -> rsp
+rsp -> rd
+rsp <-> ros2control.rm.hw
+ros2control.rm.hw <-> hardware
