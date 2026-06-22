@@ -60,6 +60,7 @@ hardware abstraction. Each diagram views one slice, narrowing from model to
 hardware.
 
 ```
+packages               how the four packages connect — ament deps; fm_robot aggregates, fm_control layers on fm_description
 robot_state_publisher  where /robot_description comes from — URDF/xacro → xacro → robot_state_publisher
 view_robot             robot state publishing — joint_state_publisher → robot_state_publisher → /tf · /robot_description
 control_robot          simulation — /robot_description + /cmd_vel → Sim control plugin → /joint_states · /tf

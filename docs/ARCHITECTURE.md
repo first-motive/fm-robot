@@ -24,6 +24,14 @@ foundation**, and `fm_control` adds the control layer on top of it. Layers above
 this repo (`fm_bringup` in [`fm-app`](https://github.com/first-motive/fm-app))
 orchestrate both, but neither package here depends upward.
 
+![packages](diagrams/packages.svg)
+
+Arrows are ament dependencies (build + exec, from each `package.xml`). `fm_robot`
+is a metapackage — it builds nothing itself, it aggregates the three.
+`fm_control` layers on `fm_description` (its `ros2_control` xacro includes the
+robot URDF); `fm_sensors` is independent. Source:
+[`diagrams/packages.d2`](diagrams/packages.d2).
+
 ## Robot State
 
 The robot model is authored as split-up URDF/xacro source files — links, joints,

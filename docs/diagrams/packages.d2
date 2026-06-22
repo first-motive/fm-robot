@@ -1,0 +1,51 @@
+# How the four packages connect. Arrows are ament dependencies (build + exec,
+# from each package.xml). fm_robot is a metapackage — it builds nothing itself,
+# it aggregates the three. fm_control layers on fm_description (its
+# ros2_control xacro includes the robot URDF). fm_sensors is independent. Each
+# block: concern (role), package + build type (pkg), shipped artifacts (art).
+...@styles
+direction: down
+
+title: Package Dependencies {
+  near: top-center
+  shape: text
+  style.font-size: 24
+}
+
+robot: "" {
+  grid-rows: 2
+  class: block
+  r: Workspace metapackage { class: role }
+  p: "fm_robot · ament_cmake" { class: pkg }
+}
+
+control: "" {
+  grid-rows: 4
+  class: block
+  r: Control { class: role }
+  p: "fm_control · ament_cmake" { class: pkg }
+  a1: "urdf/*.ros2_control.xacro" { class: art }
+  a2: "src/control_node · SDK bridges" { class: art }
+}
+
+sensors: "" {
+  grid-rows: 3
+  class: block
+  r: Sensors { class: role }
+  p: "fm_sensors · ament_python" { class: pkg }
+  a1: "sensor_node.py (stub)" { class: art }
+}
+
+desc: "" {
+  grid-rows: 4
+  class: block
+  r: Description { class: role }
+  p: "fm_description · ament_cmake" { class: pkg }
+  a1: "urdf/fm_robot.urdf.xacro" { class: art }
+  a2: "launch/view_robot · foxglove/" { class: art }
+}
+
+robot -> control: aggregates
+robot -> sensors: aggregates
+robot -> desc: aggregates
+control -> desc: depends on
