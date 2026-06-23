@@ -11,7 +11,10 @@ on:
 # externals it genuinely consumes — openarm_description (xacro) and the
 # unitree_ros2 message packages (fm_control depends on unitree_hg + unitree_api).
 # Every other external is file-vendored or reference-only and is COLCON_IGNORE'd.
-# The full multi-repo integration build lives in fm-ros2.
+# unitree_ros (G1) and so_arm (SO101) are file-vendored into fm_description's
+# share at build, so they must be imported even though they are not built — the
+# fm_description description smoke test launches every robot and variant against
+# that vendored share. The full multi-repo integration build lives in fm-ros2.
 jobs:
   build-test:
     name: build + test (humble)

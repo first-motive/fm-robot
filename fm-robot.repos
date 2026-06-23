@@ -1,6 +1,6 @@
 # vcs import < fm-robot.repos   (run from the workspace root)
 #
-# Standalone build deps: OpenArm + Unitree descriptions and messages.
+# Standalone build deps: OpenArm + Unitree + SO-ARM descriptions and messages.
 repositories:
   external/openarm_description:
     type: git
@@ -10,6 +10,12 @@ repositories:
     type: git
     url: https://github.com/unitreerobotics/unitree_ros.git
     version: ae2b2a7e9ba1b5814b5cb78b3c5800829c5591dd
+  # SO101 description source: flat URDF + assets, vendored into fm_description's
+  # share (file-vendored, not built — stays COLCON_IGNORE'd in CI).
+  external/so_arm:
+    type: git
+    url: https://github.com/TheRobotStudio/SO-ARM100.git
+    version: fda892cba81032c46c40976a48c9ceadbf40a9ca
   external/unitree_ros2:
     type: git
     url: https://github.com/unitreerobotics/unitree_ros2.git

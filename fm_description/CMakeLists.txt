@@ -150,6 +150,13 @@ endif()
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
   ament_lint_auto_find_test_dependencies()
+
+  # Smoke-test every robot description across all variants. Reads the vendored
+  # URDFs from this package's share, so it fails when the external vendoring
+  # breaks (the failure that previously surfaced only at launch).
+  find_package(ament_cmake_pytest REQUIRED)
+  ament_add_pytest_test(test_descriptions test/test_descriptions.py
+    TIMEOUT 120)
 endif()
 
 ament_package()
