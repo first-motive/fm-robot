@@ -8,6 +8,35 @@ install(
   DESTINATION share/${PROJECT_NAME}
 )
 
+# Locate the vcs externals dir once. The blocks below vendor flat URDFs + meshes
+# from external/ (unitree_ros, so_arm, openarm_description) into this package's
+# share. external/ lives at the workspace root, but this package's depth under
+# that root varies by layout — src/fm-robot/fm_description in the fm-ros2
+# workspace and in standalone CI. Walk up from this package to find external/ so
+# the path survives layout changes; a hardcoded ../external broke when the
+# workspace was flattened to the nav2 layout. Override with -DFM_EXTERNAL_DIR=...
+# if external/ lives elsewhere.
+if(NOT DEFINED FM_EXTERNAL_DIR)
+  # Walk up at most 7 levels looking for external/. The current layout nests this
+  # package 3 levels under the workspace root (src/fm-robot/fm_description); the
+  # margin tolerates a deeper layout without an unbounded search.
+  set(_dir "${CMAKE_CURRENT_SOURCE_DIR}")
+  foreach(_level RANGE 6)
+    if(IS_DIRECTORY "${_dir}/external")
+      set(FM_EXTERNAL_DIR "${_dir}/external")
+      break()
+    endif()
+    get_filename_component(_dir "${_dir}" DIRECTORY)
+  endforeach()
+endif()
+if(NOT FM_EXTERNAL_DIR)
+  # Fallback to the prior behaviour so a clean checkout without externals still
+  # configures (the vendor blocks below are each guarded by EXISTS).
+  set(FM_EXTERNAL_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../external")
+  message(WARNING "fm_description: external/ not found by walk-up; using ${FM_EXTERNAL_DIR}")
+endif()
+message(STATUS "fm_description: external dir ${FM_EXTERNAL_DIR}")
+
 # Vendor the Unitree G1 descriptions into this package's share so their meshes
 # resolve as package://fm_description/<dir>/... — the only mesh scheme Foxglove
 # Studio fetches through foxglove_bridge (file:// is host-scoped and fails over a
@@ -16,7 +45,7 @@ install(
 # checkout (e.g. CI without externals) still builds.
 #   g1_d_description   the wheeled G1-D (AGV base + arms) — the default view
 #   g1_description     the bipedal 29 DOF reference body
-set(UNITREE_ROBOTS "${CMAKE_CURRENT_SOURCE_DIR}/../external/unitree_ros/robots")
+set(UNITREE_ROBOTS "${FM_EXTERNAL_DIR}/unitree_ros/robots")
 foreach(desc g1_d_description g1_description)
   if(EXISTS "${UNITREE_ROBOTS}/${desc}/meshes")
     install(DIRECTORY "${UNITREE_ROBOTS}/${desc}" DESTINATION share/${PROJECT_NAME})
@@ -37,7 +66,7 @@ endforeach()
 # external/so_arm/ (gitignored), present only after import-externals.sh. The
 # trailing slash on the source installs its contents (URDF + assets/) into
 # so101_description. Guarded so a clean checkout (e.g. CI without externals) still builds.
-set(SO101_SRC "${CMAKE_CURRENT_SOURCE_DIR}/../external/so_arm/Simulation/SO101")
+set(SO101_SRC "${FM_EXTERNAL_DIR}/so_arm/Simulation/SO101")
 if(EXISTS "${SO101_SRC}/assets")
   install(DIRECTORY "${SO101_SRC}/" DESTINATION share/${PROJECT_NAME}/so101_description)
   message(STATUS "fm_description: vendoring so101_description from ${SO101_SRC}")
@@ -59,7 +88,7 @@ endif()
 # RViz already presents — no extra rotation. Source is the vcs-imported working copy
 # (external/openarm_description, gitignored). Guarded so a clean checkout
 # (e.g. CI without externals) still builds.
-set(OPENARM_SRC "${CMAKE_CURRENT_SOURCE_DIR}/../external/openarm_description")
+set(OPENARM_SRC "${FM_EXTERNAL_DIR}/openarm_description")
 set(OPENARM_MESH_OUT "${CMAKE_CURRENT_BINARY_DIR}/openarm_meshes")
 if(EXISTS "${OPENARM_SRC}/assets")
   find_package(Python3 REQUIRED COMPONENTS Interpreter)
