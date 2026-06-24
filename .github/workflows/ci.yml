@@ -124,13 +124,17 @@ jobs:
           rosdep update
           rosdep install --from-paths . external --ignore-src -y -r
 
+      - name: Build workspace
+        run: |
+          source /opt/ros/humble/setup.bash
+          colcon build --symlink-install
+
       - name: Launch headless, bounded
         run: |
-          # run.sh native builds in place, then launches the view — bound it so
-          # the headless launch is a smoke check. timeout SIGTERM (143) /
-          # timeout-reached (124) both mean it came up; anything else is a fail.
+          # Workspace pre-built above, so run.sh's incremental build is quick and the
+          # bounded window covers the launch itself. 124 = ran the full window (came
+          # up OK); 0 = clean exit. Anything else is a real failure.
           set +e
-          timeout --preserve-status 90 \
-            ./run.sh --native --robot g1_d use_rviz:=false use_foxglove:=false
+          timeout 90 ./run.sh --native --robot g1_d use_rviz:=false use_foxglove:=false
           code=$?
-          [ "$code" -eq 124 ] || [ "$code" -eq 143 ] || [ "$code" -eq 0 ]
+          [ "$code" -eq 124 ] || [ "$code" -eq 0 ] || [ "$code" -eq 143 ]
