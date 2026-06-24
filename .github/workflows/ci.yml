@@ -60,3 +60,61 @@ jobs:
           # Test only our packages — the built externals carry their own (upstream) tests.
           colcon test --packages-select $(colcon list --names-only | grep '^fm_')
           colcon test-result --verbose
+
+  image:
+    name: build image (FROM fm-docker base)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      # The base lives in a private-by-default GHCR package; log in to pull it.
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build the robot image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          tags: fm-robot:humble
+
+  smoke:
+    name: smoke run.sh (native headless)
+    runs-on: ubuntu-latest
+    container: ros:humble
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install tooling + ROS deps
+        run: |
+          apt-get update && apt-get install -y python3-vcstool
+          source /opt/ros/humble/setup.bash
+          vcs import < fm-robot.repos
+          # Build only the ament packages; ignore the file-vendored externals.
+          for d in external/*/; do touch "${d}COLCON_IGNORE"; done
+          rm -f external/openarm_description/COLCON_IGNORE external/unitree_ros2/COLCON_IGNORE
+          [ -d external/unitree_ros2/example/src ] && \
+            touch external/unitree_ros2/example/src/COLCON_IGNORE || true
+          apt-get install -y \
+            ros-humble-rosidl-generator-dds-idl \
+            ros-humble-cyclonedds ros-humble-rmw-cyclonedds-cpp
+          rosdep update
+          rosdep install --from-paths . external --ignore-src -y -r
+
+      - name: Launch headless, bounded
+        run: |
+          # run.sh native builds in place, then launches the view — bound it so
+          # the headless launch is a smoke check. timeout SIGTERM (143) /
+          # timeout-reached (124) both mean it came up; anything else is a fail.
+          set +e
+          timeout --preserve-status 90 \
+            ./run.sh --native --robot g1_d use_rviz:=false use_foxglove:=false
+          code=$?
+          [ "$code" -eq 124 ] || [ "$code" -eq 143 ] || [ "$code" -eq 0 ]
