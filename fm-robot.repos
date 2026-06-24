@@ -1,7 +1,13 @@
 # vcs import < fm-robot.repos   (run from the workspace root)
 #
-# Standalone build deps: OpenArm + Unitree + SO-ARM descriptions and messages.
+# Standalone build deps: OpenArm + Unitree + SO-ARM descriptions and messages,
+# plus the shared fm-docker compose overlays (imported into docker/ so run.sh's
+# container path can `docker compose -f docker/compose.yaml ...`).
 repositories:
+  docker:
+    type: git
+    url: https://github.com/first-motive/fm-docker.git
+    version: main
   external/openarm_description:
     type: git
     url: https://github.com/enactic/openarm_description.git
