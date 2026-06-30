@@ -11,6 +11,11 @@ find_package(geometry_msgs REQUIRED)
 find_package(trajectory_msgs REQUIRED)
 find_package(unitree_hg REQUIRED)
 find_package(unitree_api REQUIRED)
+# Vision 1:1 mirroring: host moveit_servo::PoseTracking (pose_tracking_node).
+find_package(moveit_servo REQUIRED)
+find_package(moveit_ros_planning REQUIRED)
+find_package(moveit_core REQUIRED)
+find_package(Eigen3 REQUIRED)
 
 add_executable(control_node src/control_node.cpp)
 target_include_directories(control_node PUBLIC
@@ -43,7 +48,19 @@ target_include_directories(g1_hand_sdk_bridge PUBLIC
 target_compile_features(g1_hand_sdk_bridge PUBLIC cxx_std_17)
 ament_target_dependencies(g1_hand_sdk_bridge rclcpp trajectory_msgs unitree_hg)
 
-install(TARGETS control_node g1_arm_sdk_bridge g1_base_teleop g1_hand_sdk_bridge
+# Vision 1:1 mirroring: hosts moveit_servo::PoseTracking, servoing the EE to an absolute
+# /target_pose and holding. Replaces servo_node on the mirror teleop path.
+add_executable(pose_tracking_node src/pose_tracking_node.cpp)
+target_compile_features(pose_tracking_node PUBLIC cxx_std_17)
+ament_target_dependencies(pose_tracking_node
+  rclcpp
+  geometry_msgs
+  moveit_servo
+  moveit_ros_planning
+  moveit_core
+  Eigen3)
+
+install(TARGETS control_node g1_arm_sdk_bridge g1_base_teleop g1_hand_sdk_bridge pose_tracking_node
   DESTINATION lib/${PROJECT_NAME})
 install(DIRECTORY include/ DESTINATION include)
 

@@ -17,6 +17,12 @@
   <depend>geometry_msgs</depend>
   <depend>unitree_api</depend>
 
+  <!-- Vision 1:1 mirroring: pose_tracking_node hosts moveit_servo::PoseTracking. -->
+  <depend>moveit_servo</depend>
+  <depend>moveit_ros_planning</depend>
+  <depend>moveit_core</depend>
+  <depend>eigen</depend>
+
   <!-- Description + xacro for the backend-selectable ros2_control system. -->
   <exec_depend>xacro</exec_depend>
   <exec_depend>openarm_description</exec_depend>

@@ -116,12 +116,17 @@ arm prefix, e.g. openarm_right_.
           isaac_joint_commands_topic="${isaac_joint_commands_topic}"
           isaac_joint_states_topic="${isaac_joint_states_topic}" />
 
+      <!-- Spawn in a bent "ready" pose, NOT all-zeros. joint4 (elbow) has lower limit
+           = 0, so a zeros spawn sits AT the joint limit AND fully extended (a kinematic
+           singularity) — MoveIt Servo then emergency-stops every cycle and refuses to
+           jog (logs "close to a position limit. Halting" + "Very close to a singularity").
+           A bent elbow lifts it off both. initial_value is applied by the sim hardware. -->
       <xacro:openarm_joint joint_name="${prefix}joint1"/>
-      <xacro:openarm_joint joint_name="${prefix}joint2"/>
+      <xacro:openarm_joint joint_name="${prefix}joint2" initial_position="0.5"/>
       <xacro:openarm_joint joint_name="${prefix}joint3"/>
-      <xacro:openarm_joint joint_name="${prefix}joint4"/>
+      <xacro:openarm_joint joint_name="${prefix}joint4" initial_position="1.2"/>
       <xacro:openarm_joint joint_name="${prefix}joint5"/>
-      <xacro:openarm_joint joint_name="${prefix}joint6"/>
+      <xacro:openarm_joint joint_name="${prefix}joint6" initial_position="0.3"/>
       <xacro:openarm_joint joint_name="${prefix}joint7"/>
 
       <xacro:if value="${hand}">
