@@ -6,9 +6,13 @@ if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
 endif()
 
 find_package(ament_cmake REQUIRED)
+find_package(pluginlib REQUIRED)
 find_package(rclcpp REQUIRED)
+find_package(realtime_tools REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(trajectory_msgs REQUIRED)
+find_package(visualization_msgs REQUIRED)
+find_package(mujoco_ros2_control_plugins REQUIRED)
 find_package(unitree_hg REQUIRED)
 find_package(unitree_api REQUIRED)
 
@@ -43,9 +47,37 @@ target_include_directories(g1_hand_sdk_bridge PUBLIC
 target_compile_features(g1_hand_sdk_bridge PUBLIC cxx_std_17)
 ament_target_dependencies(g1_hand_sdk_bridge rclcpp trajectory_msgs unitree_hg)
 
-install(TARGETS control_node g1_arm_sdk_bridge g1_base_teleop g1_hand_sdk_bridge
+add_library(fm_control_mujoco_plugins SHARED
+  src/so101_task_env_plugin.cpp
+)
+target_include_directories(fm_control_mujoco_plugins PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include>)
+target_compile_features(fm_control_mujoco_plugins PUBLIC cxx_std_17)
+ament_target_dependencies(fm_control_mujoco_plugins
+  mujoco_ros2_control_plugins
+  pluginlib
+  rclcpp
+  realtime_tools
+  visualization_msgs
+)
+pluginlib_export_plugin_description_file(
+  mujoco_ros2_control_plugins
+  fm_control_mujoco_plugins.xml
+)
+
+install(TARGETS
+  control_node
+  g1_arm_sdk_bridge
+  g1_base_teleop
+  g1_hand_sdk_bridge
   DESTINATION lib/${PROJECT_NAME})
+install(TARGETS fm_control_mujoco_plugins
+  ARCHIVE DESTINATION lib
+  LIBRARY DESTINATION lib
+  RUNTIME DESTINATION bin)
 install(DIRECTORY include/ DESTINATION include)
+install(FILES fm_control_mujoco_plugins.xml DESTINATION share/${PROJECT_NAME})
 
 # Backend-selectable ros2_control xacro consumed by the sim/teleop launches.
 install(DIRECTORY urdf DESTINATION share/${PROJECT_NAME})
@@ -69,6 +101,11 @@ if(BUILD_TESTING)
   target_include_directories(test_g1_hand_sdk_bridge PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/include)
   ament_target_dependencies(test_g1_hand_sdk_bridge unitree_hg)
+
+  ament_add_gtest(test_so101_task_env_markers test/test_so101_task_env_markers.cpp)
+  target_include_directories(test_so101_task_env_markers PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/include)
+  ament_target_dependencies(test_so101_task_env_markers rclcpp visualization_msgs)
 endif()
 
 ament_package()

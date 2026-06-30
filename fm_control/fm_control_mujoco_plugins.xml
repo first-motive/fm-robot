@@ -1,0 +1,10 @@
+<library path="fm_control_mujoco_plugins">
+  <class
+      name="fm_control/So101TaskEnvPlugin"
+      type="fm_control::So101TaskEnvPlugin"
+      base_class_type="mujoco_ros2_control_plugins::MuJoCoROS2ControlPluginBase">
+    <description>
+      Publishes live visualization markers for SO101 MuJoCo task environments so Foxglove follows the real prop body poses.
+    </description>
+  </class>
+</library>
