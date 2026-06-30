@@ -181,7 +181,7 @@ void So101TaskEnvPlugin::publish_markers(const mjData * data)
   for (std::size_t i = 0; i < tracked_markers_.size(); ++i) {
     const auto & tracked = tracked_markers_[i];
     auto marker = marker_from_spec(tracked.spec, frame_id_, static_cast<int>(i));
-    marker.header.stamp = stamp.to_msg();
+    marker.header.stamp = stamp;
 
     if (tracked.body_id >= 0) {
       apply_mujoco_pose(
