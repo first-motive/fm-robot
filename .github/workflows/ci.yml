@@ -113,7 +113,7 @@ jobs:
       # fm-teleop, fm-app) pull this as their FROM base, so the GHCR package must be
       # set public once it first publishes.
       - name: Build + publish the robot image
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           platforms: linux/amd64,linux/arm64
