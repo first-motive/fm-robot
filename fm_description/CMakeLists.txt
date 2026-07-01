@@ -81,23 +81,27 @@ endif()
 # Studio fetches through foxglove_bridge. Unlike the G1/SO101 flat-file vendoring,
 # OpenArm ships as a built ament_cmake package; only its visual meshes are
 # converted here. The upstream visual meshes are COLLADA (.dae) with mixed declared
-# up-axes (arm + pinch gripper Y_UP, body Z_UP). Foxglove ignores per-file up_axis
-# and applies one global mesh-up setting, so the raw .dae meshes render mis-rotated
-# (RViz honours up_axis, so it is unaffected). assimp bakes each file's up_axis into
-# the geometry on export, so a plain DAE -> STL conversion yields the orientation
-# RViz already presents — no extra rotation. Source is the vcs-imported working copy
-# (external/openarm_description, gitignored). Guarded so a clean checkout
-# (e.g. CI without externals) still builds.
+# up-axes (arm + pinch gripper Y_UP, body + parallel-link Z_UP), but their vertices
+# are all authored in one shared Z-up world frame — the up_axis tags are stale
+# metadata. Foxglove needs plain STL (it cannot render the .dae). The converter
+# ignores up_axis and exports the raw geometry via trimesh, keeping every mesh in
+# the Z-up frame the URDF <visual> origins expect; an earlier assimp converter
+# honoured up_axis and rotated the Z_UP body 90 degrees (stand flat, arms upright).
+# Source is the vcs-imported working copy (external/openarm_description, gitignored).
+# Guarded so a clean checkout (e.g. CI without externals) still builds.
 set(OPENARM_SRC "${FM_EXTERNAL_DIR}/openarm_description")
 set(OPENARM_MESH_OUT "${CMAKE_CURRENT_BINARY_DIR}/openarm_meshes")
 if(EXISTS "${OPENARM_SRC}/assets")
   find_package(Python3 REQUIRED COMPONENTS Interpreter)
-  find_program(ASSIMP_EXE assimp)
-  if(NOT ASSIMP_EXE)
+  execute_process(
+    COMMAND "${Python3_EXECUTABLE}" -c "import trimesh, collada"
+    RESULT_VARIABLE OPENARM_DEPS_MISSING
+    OUTPUT_QUIET ERROR_QUIET)
+  if(OPENARM_DEPS_MISSING)
     message(WARNING
-      "fm_description: assimp CLI not found — OpenArm visual meshes not "
-      "converted. Rebuild the dev image (it installs assimp-utils) to view the "
-      "OpenArm.")
+      "fm_description: python trimesh + pycollada not importable — OpenArm "
+      "visual meshes not converted. Rebuild the dev image (it installs "
+      "python3-trimesh + python3-pycollada) to view the OpenArm.")
   else()
     # Enumerate the visual .dae sources and the .stl outputs they map to, mirroring
     # the converter's rule (src "*/visual/*.dae" -> out "<rel>.stl"). Declaring the
@@ -127,7 +131,6 @@ if(EXISTS "${OPENARM_SRC}/assets")
                 "${CMAKE_CURRENT_SOURCE_DIR}/scripts/convert_openarm_visual_meshes.py"
                 --src "${OPENARM_SRC}"
                 --out "${OPENARM_MESH_OUT}"
-                --assimp "${ASSIMP_EXE}"
         DEPENDS ${OPENARM_DAE}
                 "${CMAKE_CURRENT_SOURCE_DIR}/scripts/convert_openarm_visual_meshes.py"
         COMMENT "fm_description: converting OpenArm visual meshes to STL"
@@ -156,6 +159,11 @@ if(BUILD_TESTING)
   # breaks (the failure that previously surfaced only at launch).
   find_package(ament_cmake_pytest REQUIRED)
   ament_add_pytest_test(test_descriptions test/test_descriptions.py
+    TIMEOUT 120)
+  # Unit-tests the OpenArm mesh converter (canary + staleness + export). Skips
+  # itself when trimesh is unavailable (pytest.importorskip).
+  ament_add_pytest_test(test_convert_openarm_visual_meshes
+    test/test_convert_openarm_visual_meshes.py
     TIMEOUT 120)
 endif()
 

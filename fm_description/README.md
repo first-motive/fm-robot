@@ -170,36 +170,35 @@ Now the panel publishes `/joint_command`, jsp holds the last value and republish
 single consistent `/joint_states`, and the flip-flop is gone. Override the topic with
 `panel_topic:=<topic>` if you prefer a different name.
 
-### OpenArm: Visual Mesh Up-Axis Baking
+### OpenArm: Visual Mesh Conversion to STL
 
 OpenArm's upstream visual meshes are COLLADA (`.dae`) with **inconsistent declared
-up-axes**: the arm and pinch-gripper meshes are `Y_UP`, the body mesh is `Z_UP`.
+up-axes**: the arm and pinch-gripper meshes are `Y_UP`, the body and parallel-link
+meshes are `Z_UP`. The declared axes disagree, but the vertices are all authored in
+one shared Z-up world frame — the `up_axis` tags are stale metadata, not a real
+per-file rotation. Foxglove needs plain STL (it fetches `package://` STL through
+foxglove_bridge and cannot render the `.dae`).
+
+The fix is to **ignore `up_axis` and export the raw geometry**, which keeps every
+mesh in the shared Z-up frame the URDF `<visual>` origins already expect. trimesh
+does this — `trimesh.load(..., force="mesh")` applies the COLLADA node transforms
+and concatenates geometry without re-rotating for `up_axis`:
 
 ```
-RViz                                Foxglove Studio
-honours each file's <up_axis>       ignores per-file <up_axis>,
-  → renders upright                   shows raw .dae geometry
-                                    → mixed up-axes render mis-rotated,
-                                      no single mesh-up toggle fixes them
+.dae (any declared up_axis)  ──trimesh load + export (raw geometry)──▶  STL
 ```
 
-The fix is to bake each file's `up_axis` into the geometry, so the meshes no longer
-depend on a reader honouring `<up_axis>`. assimp does this on load: it applies the
-declared `up_axis` and exports STL in that resolved frame — the same orientation
-RViz presents. So the conversion is a plain DAE → STL export per visual mesh, with
-**no extra rotation**:
-
-```
-.dae (declared up_axis)  ──assimp export (bakes up_axis)──▶  STL
-```
+An earlier converter used assimp, which **honoured** each file's `up_axis` on
+export. That rotated the `Z_UP` body mesh 90 degrees relative to the `Y_UP` arm
+meshes, so the assembled robot rendered with its stand lying flat while the arms
+sat upright. A canary assertion on the body mesh (its long axis must stay Z) guards
+against a future trimesh that starts applying `up_axis`.
 
 `fm_description`'s build (see `CMakeLists.txt` +
 `scripts/convert_openarm_visual_meshes.py`) runs this for every visual mesh and
 installs the results into `share/fm_description/openarm_meshes/`, mirroring the
-upstream path; the launch rewrites visual references onto them. The URDF's own
-`<visual>` origins then orient each mesh exactly as in RViz — adding a rotation
-here would double-rotate the meshes and scatter the assembled robot. Collision
-meshes are already STL and are not rendered by default, so they are left pointing at
+upstream path; the launch rewrites visual references onto them. Collision meshes are
+already STL and are not rendered by default, so they are left pointing at
 `openarm_description`.
 
 ### OpenArm: Foxglove Asset Allowlist and Send-Buffer Limit

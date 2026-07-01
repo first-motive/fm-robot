@@ -136,14 +136,16 @@ def _build_so101(share, variant):
 # import-externals.sh leaves it OUT of COLCON_IGNORE, so colcon build compiles it
 # into the workspace. We therefore process its xacro at launch.
 #
-# Visual mesh up-axis baking. The upstream visual meshes are COLLADA (.dae) with
-# inconsistent declared up-axes (arm and pinch gripper Y_UP, body Z_UP). RViz
-# honours each file's up_axis, so it renders upright; Foxglove Studio ignores
-# per-file up_axis and applies one global mesh-up setting, so the raw .dae meshes
-# render mis-rotated. fm_description's build converts every OpenArm visual mesh to
-# STL with assimp, which bakes each file's up_axis into the geometry — yielding the
-# orientation RViz already presents, with no extra rotation (see CMakeLists.txt).
-# We rewrite each visual reference from package://openarm_description/<rel>.dae to
+# Visual mesh conversion to STL. The upstream visual meshes are COLLADA (.dae) with
+# inconsistent declared up-axes (arm and pinch gripper Y_UP, body and parallel-link
+# Z_UP), but their vertices are all authored in one shared Z-up world frame — the
+# up_axis tags are stale metadata. Foxglove needs plain STL (it cannot render the
+# .dae). fm_description's build converts every OpenArm visual mesh with trimesh,
+# which ignores up_axis and exports the raw geometry, keeping every mesh in the
+# Z-up frame the URDF <visual> origins expect (see CMakeLists.txt). An earlier
+# assimp converter honoured up_axis and rotated the Z_UP body 90 degrees, so the
+# stand rendered flat while the arms stayed upright. We rewrite each visual
+# reference from package://openarm_description/<rel>.dae to
 # package://fm_description/openarm_meshes/<rel>.stl. Collision meshes are already
 # STL, are not rendered by default, and are left pointing at openarm_description.
 
