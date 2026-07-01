@@ -68,6 +68,7 @@ docker compose -f docker/compose.yaml -f docker/compose.macos.yaml \
 ./scripts/view-robot.sh --robot so101
 ./scripts/view-robot.sh --robot openarm                  # right_arm
 ./scripts/view-robot.sh --robot openarm --variant default_bimanual
+./scripts/view-robot.sh --robot axol                     # bimanual (two 7-DOF arms)
 ./scripts/view-robot.sh use_rviz:=true                   # RViz (needs an X display)
 ```
 
@@ -77,7 +78,7 @@ or underscore (`g1-d` == `g1_d`); any extra args pass straight through to
 
 ### Robots
 
-The registry abstracts three robots — each entry defines its description source,
+The registry abstracts four robots — each entry defines its description source,
 variants, and mesh strategy; the viewer and launchers select by `robot:=` and
 `variant:=`.
 
@@ -88,6 +89,7 @@ variants, and mesh strategy; the viewer and launchers select by `robot:=` and
 | `g1_d` | `g1_d`, `g1_29dof_rev_1_0` | `unitree_ros` flat URDF, vendored into share | `meshes/` → `package://fm_description/<desc>/meshes/` |
 | `so101` | _(none — single description)_ | `SO-ARM100` flat URDF, vendored into share | `assets/` → `package://fm_description/so101_description/assets/` |
 | `openarm` | `right_arm`, `left_arm`, `default_bimanual`, `*_with_pinch_gripper` | `openarm_description` built ament_cmake package | visual `.dae` → `package://fm_description/openarm_meshes/*.stl` |
+| `axol` | `bimanual` | Almond Bot axol (flat URDF + STL, vendored) | `package://assembly/` → `package://fm_description/axol_description/` |
 
 - **g1_d** — both the wheeled G1-D and the bipedal 29 DOF body are installed; pick
   with `--variant`. The bipedal `g1_description` ships hand variants too (e.g.
@@ -99,12 +101,15 @@ variants, and mesh strategy; the viewer and launchers select by `robot:=` and
   `display_openarm.launch.py`). The default `right_arm` disables the body and left
   arm. The preset's ros2_control include runs with fake hardware and is harmless
   for a view, so no disable flag is needed.
+- **axol** — the upstream (`almond-bot/axol`) ships a flat URDF + STL, not a ROS
+  package; the single `bimanual` description carries both 7-DOF arms, so
+  `--variant` is ignored.
 
 Common launch args (every robot):
 
 | Arg | Default | Meaning |
 |-----|---------|---------|
-| `robot` | `g1_d` | registry key: `g1_d`, `so101`, `openarm` |
+| `robot` | `g1_d` | registry key: `g1_d`, `so101`, `openarm`, `axol` |
 | `variant` | _(empty → entry default)_ | robot sub-form (see the table above) |
 | `use_foxglove` | `true` | start foxglove_bridge on `ws://8765` |
 | `use_rviz` | `false` | start RViz (needs an X display) |
