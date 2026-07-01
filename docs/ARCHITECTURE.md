@@ -14,7 +14,7 @@ robot layer fits under bringup, sim, teleop, and the data/policy loop — see
 
 | Package | Build | Responsibility |
 |---------|-------|----------------|
-| `fm_description` | ament_cmake | URDF/xacro, mesh handling, multi-robot registry (G1-D, SO101, OpenArm), Foxglove layouts |
+| `fm_description` | ament_cmake | URDF/xacro, mesh handling, multi-robot registry (G1-D, SO101, OpenArm, Axol), Foxglove layouts |
 | `fm_control` | ament_cmake | Backend-selectable `ros2_control` description (mock/mujoco/gazebo/isaac/real) |
 | `fm_sensors` | ament_python | Multi-sensor capture layer (placeholder stub) |
 | `fm_robot` | ament_cmake (meta) | Metapackage tying the three together for a single install |

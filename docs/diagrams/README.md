@@ -66,7 +66,7 @@ docs/diagrams/
 fm_description/doc/diagrams/
   robot_state_publisher  where /robot_description comes from — URDF/xacro → xacro → robot_state_publisher
   view_robot             robot state publishing — joint_state_publisher → robot_state_publisher → /tf · /robot_description
-  registry               robot registry — fm_description abstracts g1_d · so101 · openarm (variants + mesh strategy)
+  registry               robot registry — fm_description abstracts g1_d · so101 · openarm · axol (variants + mesh strategy)
 
 fm_control/doc/diagrams/
   control                ros2_control graph — controller_manager ↔ resource_manager → hardware interfaces

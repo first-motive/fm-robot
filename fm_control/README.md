@@ -1,7 +1,7 @@
 # fm_control
 
-The backend-selectable `ros2_control` descriptions for the OpenArm, SO101, and G1-D,
-plus the G1-D teleop bridge nodes. C++ (`ament_cmake`, C++17).
+The backend-selectable `ros2_control` descriptions for the OpenArm, SO101, G1-D,
+and Axol, plus the G1-D teleop bridge nodes. C++ (`ament_cmake`, C++17).
 
 ## Role
 
@@ -37,6 +37,7 @@ urdf/
   openarm.sim.urdf.xacro / openarm.ros2_control.xacro   OpenArm (7-DOF, preset-driven)
   so101.sim.urdf.xacro   / so101.ros2_control.xacro     SO101 (5-DOF arm + gripper)
   g1.sim.urdf.xacro      / g1.ros2_control.xacro        G1-D right arm (7-DOF)
+  axol.sim.urdf.xacro    / axol.ros2_control.xacro      Axol bimanual (two 7-DOF arms, 14 joints)
 src/
   control_node.cpp        placeholder node (unused by the backends below)
   g1_arm_sdk_bridge.cpp   G1-D real arm: Servo JointTrajectory -> unitree_hg/LowCmd
@@ -55,12 +56,12 @@ case below.
 ![hardware](doc/diagrams/hardware.svg)
 
 ```
-sim_backend   openarm                     so101                            g1_d
+sim_backend   openarm                     so101                            g1_d                      axol
   mock          mock_components/GenericSystem (all robots)
   mujoco        mujoco_ros2_control/MujocoSystemInterface (all robots)
   gazebo        gz_ros2_control/GazeboSimSystem (all robots)
   isaac         topic_based_ros2_control/TopicBasedSystem (all robots)
-  real          openarm_hardware/OpenArmHW   feetech_ros2_driver/FeetechHardwareInterface   (no plugin — bridge)
+  real          openarm_hardware/OpenArmHW   feetech_ros2_driver/FeetechHardwareInterface   (no plugin — bridge)   (deferred — no CAN plugin yet)
 ```
 
 The sim backends are identical across robots: only the geometry + joint set differ.
@@ -83,9 +84,11 @@ xacro $(ros2 pkg prefix fm_control)/share/fm_control/urdf/so101.sim.urdf.xacro \
 
 Each emits its `<ros2_control>` system with joint names matching the geometry exactly,
 and (for gazebo) the `<gazebo>` world plugin that hosts the controller_manager inside
-the sim. SO101 and G1-D merge a vendored flat URDF from `fm_description`'s share;
-OpenArm parses its preset-driven `openarm_description` xacro. The robot name matches
-each MoveIt SRDF so Servo accepts the pair.
+the sim. SO101, G1-D, and Axol merge a vendored flat URDF from `fm_description`'s
+share; OpenArm parses its preset-driven `openarm_description` xacro. The robot name
+matches each MoveIt SRDF so Servo accepts the pair. Axol is bimanual: its xacro
+emits two `<ros2_control>` systems (`axol_left_system` + `axol_right_system`), 14
+joints total.
 
 Consumed by `fm_bringup`'s `sim.launch.py`, `servo.launch.py`, and `teleop.launch.py`.
 
