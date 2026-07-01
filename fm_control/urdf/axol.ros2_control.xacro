@@ -1,0 +1,115 @@
+<?xml version="1.0"?>
+<!--
+First Motive backend-selectable ros2_control for the Almond Bot Axol.
+
+Axol is bimanual: two independent 7-DOF arms sharing one base. We emit ONE
+<ros2_control> system per arm (axol_left_system, axol_right_system), each owning
+its 7 joints, so the left/right arm controllers claim disjoint joint sets and each
+arm can be jogged on its own Servo node — the same two-system shape the OpenArm
+uses. The controllers, controller_manager, and command/state interface set stay
+identical across the sim backends; only the <hardware> System plugin swaps,
+selected by `sim_backend`:
+
+  mock    -> mock_components/GenericSystem               (no sim; perfect state echo)
+  mujoco  -> mujoco_ros2_control/MujocoSystemInterface   (Mac daily driver, CPU)
+  gazebo  -> gz_ros2_control/GazeboSimSystem             (Linux/GPU)
+  isaac   -> topic_based_ros2_control/TopicBasedSystem   (Isaac Sim over ROS topics)
+
+Joint names mirror the vendored axol.urdf exactly: {left,right}_{s1,s2,s3,e1,e2,
+w1,w2}_0 (s=shoulder, e=elbow, w=wrist; the _0 suffix is the Onshape export's).
+The grippers are fixed in the URDF (no DOF), so no gripper joints appear here.
+
+The real backend is DEFERRED. Axol drives its motors over CAN (two USB-C buses,
+one per arm) and ships no ros2_control SystemInterface — so there is no `real`
+<hardware> block yet. TODO(real): author a SocketCAN ros2_control plugin (mirror
+openarm_hardware, one bus per arm) and add a `real` branch here when the physical
+arm is on hand.
+-->
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <!-- Emit the <hardware> block for the selected backend. mujoco_model_path is
+       consumed only by mujoco; isaac topics only by isaac. -->
+  <xacro:macro name="axol_backend_hardware"
+      params="sim_backend mujoco_model_path
+              isaac_joint_commands_topic isaac_joint_states_topic">
+
+    <xacro:if value="${sim_backend == 'mock'}">
+      <hardware>
+        <plugin>mock_components/GenericSystem</plugin>
+        <param name="fake_sensor_commands">false</param>
+        <param name="state_following_offset">0.0</param>
+      </hardware>
+    </xacro:if>
+
+    <xacro:if value="${sim_backend == 'mujoco'}">
+      <hardware>
+        <plugin>mujoco_ros2_control/MujocoSystemInterface</plugin>
+        <!-- MujocoSystemInterface reads the MJCF from this URDF param. The axol
+             MJCF joint names match this system's joints exactly. Both arm systems
+             point at the same model; the plugin maps each system's joints by name. -->
+        <param name="mujoco_model">${mujoco_model_path}</param>
+      </hardware>
+    </xacro:if>
+
+    <xacro:if value="${sim_backend == 'gazebo'}">
+      <hardware>
+        <plugin>gz_ros2_control/GazeboSimSystem</plugin>
+      </hardware>
+    </xacro:if>
+
+    <xacro:if value="${sim_backend == 'isaac'}">
+      <hardware>
+        <plugin>topic_based_ros2_control/TopicBasedSystem</plugin>
+        <param name="joint_commands_topic">${isaac_joint_commands_topic}</param>
+        <param name="joint_states_topic">${isaac_joint_states_topic}</param>
+      </hardware>
+    </xacro:if>
+  </xacro:macro>
+
+  <!-- Sim joint: position/velocity/effort command + state, uniform across the sim
+       backends so the controller set never changes. initial_position seeds the
+       mock/mujoco starting pose (defaults 0.0). -->
+  <xacro:macro name="axol_sim_joint" params="joint_name initial_position:=0.0">
+    <joint name="${joint_name}">
+      <command_interface name="position"/>
+      <command_interface name="velocity"/>
+      <command_interface name="effort"/>
+      <state_interface name="position">
+        <param name="initial_value">${initial_position}</param>
+      </state_interface>
+      <state_interface name="velocity">
+        <param name="initial_value">0.0</param>
+      </state_interface>
+      <state_interface name="effort">
+        <param name="initial_value">0.0</param>
+      </state_interface>
+    </joint>
+  </xacro:macro>
+
+  <!-- One <ros2_control> system for a single arm: backend hardware + the arm's 7
+       joints. `prefix` is left_ or right_; `elbow_ready` bends the e1 joint out of
+       the straight-arm singularity so MoveIt Servo can jog from the start (left
+       e1 range [0, 2.618], right [-2.618, 0], so the caller passes +/- accordingly). -->
+  <xacro:macro name="axol_arm_system"
+      params="prefix sim_backend elbow_ready mujoco_model_path:=''
+              isaac_joint_commands_topic:=/isaac_joint_commands
+              isaac_joint_states_topic:=/isaac_joint_states">
+
+    <ros2_control name="axol_${prefix}system" type="system">
+      <xacro:axol_backend_hardware
+          sim_backend="${sim_backend}"
+          mujoco_model_path="${mujoco_model_path}"
+          isaac_joint_commands_topic="${isaac_joint_commands_topic}"
+          isaac_joint_states_topic="${isaac_joint_states_topic}" />
+
+      <xacro:axol_sim_joint joint_name="${prefix}s1_0"/>
+      <xacro:axol_sim_joint joint_name="${prefix}s2_0"/>
+      <xacro:axol_sim_joint joint_name="${prefix}s3_0"/>
+      <xacro:axol_sim_joint joint_name="${prefix}e1_0" initial_position="${elbow_ready}"/>
+      <xacro:axol_sim_joint joint_name="${prefix}e2_0"/>
+      <xacro:axol_sim_joint joint_name="${prefix}w1_0"/>
+      <xacro:axol_sim_joint joint_name="${prefix}w2_0"/>
+    </ros2_control>
+  </xacro:macro>
+
+</robot>

@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+First Motive Axol description with backend-selectable ros2_control Systems.
+
+This merges the vendored Almond Bot Axol geometry (the flat axol.urdf installed
+into fm_description's share) and injects First Motive's per-arm <ros2_control>
+systems, selected by `sim_backend`. Axol is a fixed bimanual layout (two 7-DOF
+arms), so there is no preset arg — the variant is nominal; both arms are always
+emitted.
+
+Args:
+  sim_backend   mock | mujoco | gazebo | isaac  (selects the System plugin; no
+                real backend yet — Axol's CAN driver is deferred)
+  mujoco_model  MJCF the mujoco backend loads; injected by the fm_bringup registry
+                from fm_sim_models when sim_backend=mujoco (empty default otherwise)
+-->
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="axol">
+
+  <xacro:arg name="sim_backend" default="mock"/>
+  <xacro:arg name="isaac_joint_commands_topic" default="/isaac_joint_commands"/>
+  <xacro:arg name="isaac_joint_states_topic" default="/isaac_joint_states"/>
+  <!-- MujocoSystemInterface reads the MJCF from a URDF <param>. The path is owned by
+       fm_sim_models and injected by the fm_bringup registry; the default stays empty. -->
+  <xacro:arg name="mujoco_model" default=""/>
+  <xacro:property name="mujoco_model_path" value="$(arg mujoco_model)"/>
+  <!-- Controllers file the Gazebo gz_ros2_control plugin loads; gazebo backend only. -->
+  <xacro:arg name="gazebo_controllers_file" default=""/>
+
+  <!-- Geometry: the vendored flat Axol URDF, installed into fm_description's share.
+       Its links/joints merge into this robot. Mesh paths stay package://assembly/...;
+       the fm_bringup registry rewrites them to package://fm_description at load. -->
+  <xacro:include filename="$(find fm_description)/axol_description/axol.urdf"/>
+  <xacro:include filename="$(find fm_control)/urdf/axol.ros2_control.xacro"/>
+
+  <!-- One system per arm. elbow_ready bends each e1 joint out of the straight-arm
+       singularity, within that arm's limit (left e1 [0, 2.618], right [-2.618, 0]). -->
+  <xacro:axol_arm_system
+      prefix="left_"
+      sim_backend="$(arg sim_backend)"
+      elbow_ready="1.0"
+      mujoco_model_path="${mujoco_model_path}"
+      isaac_joint_commands_topic="$(arg isaac_joint_commands_topic)"
+      isaac_joint_states_topic="$(arg isaac_joint_states_topic)"/>
+
+  <xacro:axol_arm_system
+      prefix="right_"
+      sim_backend="$(arg sim_backend)"
+      elbow_ready="-1.0"
+      mujoco_model_path="${mujoco_model_path}"
+      isaac_joint_commands_topic="$(arg isaac_joint_commands_topic)"
+      isaac_joint_states_topic="$(arg isaac_joint_states_topic)"/>
+
+  <!-- Gazebo hosts the controller_manager inside the sim via this world plugin,
+       which loads the controllers.yaml. Emitted only for the gazebo backend. -->
+  <xacro:if value="${'$(arg sim_backend)' == 'gazebo'}">
+    <gazebo>
+      <plugin filename="gz_ros2_control-system"
+              name="gz_ros2_control::GazeboSimROS2ControlPlugin">
+        <parameters>$(arg gazebo_controllers_file)</parameters>
+      </plugin>
+    </gazebo>
+  </xacro:if>
+
+</robot>
