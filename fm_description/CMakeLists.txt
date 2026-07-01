@@ -76,6 +76,25 @@ else()
     "./scripts/import-externals.sh before building to view the SO101.")
 endif()
 
+# Vendor the Almond Bot Axol arm into this package's share as axol_description so
+# its meshes resolve as package://fm_description/axol_description/meshes/... — the
+# only mesh scheme Foxglove Studio fetches through foxglove_bridge. Axol ships as
+# plain files (flat axol.urdf + meshes/*.stl) under almond_axol/kinematics/urdf,
+# vendored from the vcs-imported axol working copy. vcs names the dir after its
+# fm-robot.repos key (axol), so the source lives at external/axol/ (gitignored),
+# present only after import-externals.sh. The trailing slash on the source installs
+# its contents (URDF + meshes/) into axol_description. Guarded so a clean checkout
+# (e.g. CI without externals) still builds.
+set(AXOL_SRC "${FM_EXTERNAL_DIR}/axol/almond_axol/kinematics/urdf")
+if(EXISTS "${AXOL_SRC}/meshes")
+  install(DIRECTORY "${AXOL_SRC}/" DESTINATION share/${PROJECT_NAME}/axol_description)
+  message(STATUS "fm_description: vendoring axol_description from ${AXOL_SRC}")
+else()
+  message(WARNING
+    "fm_description: Axol not found under ${AXOL_SRC} — run "
+    "./scripts/import-externals.sh before building to view the Axol.")
+endif()
+
 # Vendor the Enactic OpenArm VISUAL meshes into this package's share as STL,
 # resolving as package://fm_description/openarm_meshes/... — the scheme Foxglove
 # Studio fetches through foxglove_bridge. Unlike the G1/SO101 flat-file vendoring,

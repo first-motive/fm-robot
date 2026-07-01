@@ -127,6 +127,39 @@ def _build_so101(share, variant):
     )
 
 
+# --- Axol -----------------------------------------------------------------
+
+# The Axol description is installed into this package's share by CMakeLists,
+# sourced from the vcs-imported axol working copy (run import-externals.sh, then
+# build). It is a single flat bimanual URDF (axol.urdf) plus meshes/. The URDF
+# already references meshes as package://assembly/meshes/... (its Onshape export
+# name); we rewrite the "assembly" package to fm_description/axol_description so
+# the bridge resolves them from this package's share.
+
+
+def _build_axol(share, variant):
+    """Load the flat Axol URDF and rewrite its package:// meshes to fm_description."""
+    # Axol has a single bimanual description; the variant arg is ignored.
+    root = os.path.join(share, "axol_description")
+    urdf_path = os.path.join(root, "axol.urdf")
+    if not os.path.isfile(urdf_path):
+        raise RuntimeError(
+            f"Axol URDF not found: {urdf_path}\n"
+            "Import externals then build: ./scripts/import-externals.sh && colcon build"
+        )
+
+    with open(urdf_path, "r") as f:
+        robot_description = f.read()
+
+    # Rewrite the exported "assembly" package to this package's share so Foxglove
+    # fetches the meshes via the bridge. The meshes live under
+    # axol_description/meshes/ (installed by CMakeLists).
+    return robot_description.replace(
+        'filename="package://assembly/',
+        f'filename="package://{PKG}/axol_description/',
+    )
+
+
 # --- OpenArm --------------------------------------------------------------
 
 # OpenArm differs from the G1 and SO101 views in how the description is sourced.
@@ -272,6 +305,12 @@ ROBOTS = {
         "build_description": _build_so101,
         "bridge_params": _DEFAULT_BRIDGE_PARAMS,
     },
+    "axol": {
+        "label": "Almond Bot Axol",
+        "default_variant": "bimanual",
+        "build_description": _build_axol,
+        "bridge_params": _DEFAULT_BRIDGE_PARAMS,
+    },
     "openarm": {
         "label": "Enactic OpenArm",
         "default_variant": "right_arm",
@@ -360,7 +399,7 @@ def generate_launch_description():
                 "robot",
                 default_value="g1_d",
                 description=(
-                    "Registry key selecting the robot: g1_d, so101, openarm."
+                    "Registry key selecting the robot: g1_d, so101, axol, openarm."
                 ),
             ),
             DeclareLaunchArgument(
@@ -370,7 +409,7 @@ def generate_launch_description():
                     "Robot sub-form (empty uses the entry's default): G1 URDF "
                     "basename (g1_d, g1_29dof_rev_1_0) or OpenArm robot_preset "
                     "(right_arm, left_arm, default_bimanual, *_with_pinch_gripper). "
-                    "Ignored for so101."
+                    "Ignored for so101 and axol."
                 ),
             ),
             DeclareLaunchArgument(

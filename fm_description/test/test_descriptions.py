@@ -50,6 +50,7 @@ CASES = [
     ("g1_d", "g1_d", "package://fm_description/g1_d_description/meshes/"),
     ("g1_d", "g1_29dof_rev_1_0", "package://fm_description/g1_description/meshes/"),
     ("so101", "so101", "package://fm_description/so101_description/assets/"),
+    ("axol", "bimanual", "package://fm_description/axol_description/meshes/"),
     ("openarm", "right_arm", "package://fm_description/openarm_meshes/"),
     ("openarm", "left_arm", "package://fm_description/openarm_meshes/"),
     ("openarm", "default_bimanual", "package://fm_description/openarm_meshes/"),
