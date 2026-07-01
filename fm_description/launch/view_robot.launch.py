@@ -203,7 +203,10 @@ _VISUAL_MESH_SUB = r"package://fm_description/openarm_meshes/\1.stl"
 # material entirely is also covered (defensive — upstream currently gives all
 # seven a material).
 _OPENARM_COLOR = "0.247 0.247 0.247 1.0"
-_OPENARM_MATERIAL = f'<material name="openarm_matte_black"><color rgba="{_OPENARM_COLOR}"/></material>'
+_OPENARM_MATERIAL = (
+    f'<material name="openarm_matte_black">'
+    f'<color rgba="{_OPENARM_COLOR}"/></material>'
+)
 
 # Override the colour inside every existing OpenArm <material> (the xacro names
 # them openarm_*_material). Group 1 ends at rgba=", group 2 is the closing "/>.
