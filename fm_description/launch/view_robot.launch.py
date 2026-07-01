@@ -159,6 +159,32 @@ _OPENARM_XACRO_REL = "assets/robot/openarm_v2.0/urdf/openarm_v20.urdf.xacro"
 _VISUAL_MESH_RE = re.compile(r"package://openarm_description/([^\"']+?)\.dae")
 _VISUAL_MESH_SUB = r"package://fm_description/openarm_meshes/\1.stl"
 
+# Recolour OpenArm. The v2.0 xacro emits one <material> per visual, all set to a
+# flat light grey (rgba 0.753) — it does NOT read the real colours baked into the
+# COLLADA visual meshes (dominant diffuse "palette_01_matte_black" 0.247, silver
+# 0.65 accents), and the DAE->STL conversion drops those baked colours too. So
+# every OpenArm link renders flat grey, while G1 and SO101 carry real per-link
+# colours in their URDFs and render coloured. We override the grey with OpenArm's
+# dominant matte black. STL holds one colour per mesh, so the black+silver
+# two-tone collapses to a single flat colour per link. A visual missing a
+# material entirely is also covered (defensive — upstream currently gives all
+# seven a material).
+_OPENARM_COLOR = "0.247 0.247 0.247 1.0"
+_OPENARM_MATERIAL = f'<material name="openarm_matte_black"><color rgba="{_OPENARM_COLOR}"/></material>'
+
+# Override the colour inside every existing OpenArm <material> (the xacro names
+# them openarm_*_material). Group 1 ends at rgba=", group 2 is the closing "/>.
+_OPENARM_COLOR_RE = re.compile(r'(<material name="openarm[^"]*">\s*<color rgba=")[^"]*("\s*/>)')
+_VISUAL_BLOCK_RE = re.compile(r"<visual\b[^>]*>.*?</visual>", re.DOTALL)
+
+
+def _add_openarm_material(match):
+    """Inject the OpenArm material into a <visual> block that lacks one."""
+    block = match.group(0)
+    if "<material" in block:
+        return block
+    return block.replace("</visual>", _OPENARM_MATERIAL + "</visual>")
+
 
 def _build_openarm(share, variant):
     """Process the OpenArm xacro for a preset and rewrite .dae visuals to STL."""
@@ -193,6 +219,14 @@ def _build_openarm(share, variant):
         robot_description = doc.toxml()
         # Point visual meshes at the Z-up STL set in this package's share.
         robot_description = _VISUAL_MESH_RE.sub(_VISUAL_MESH_SUB, robot_description)
+        # Recolour: override the flat grey the xacro assigns each link, then cover
+        # any visual that has no material at all (see above).
+        robot_description = _OPENARM_COLOR_RE.sub(
+            rf"\g<1>{_OPENARM_COLOR}\g<2>", robot_description
+        )
+        robot_description = _VISUAL_BLOCK_RE.sub(
+            _add_openarm_material, robot_description
+        )
     except Exception as exc:
         raise RuntimeError(
             f"Failed to process OpenArm xacro: {xacro_path}\n"
