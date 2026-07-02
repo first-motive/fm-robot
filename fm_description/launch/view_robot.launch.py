@@ -136,6 +136,13 @@ def _build_so101(share, variant):
 # name); we rewrite the "assembly" package to fm_description/axol_description so
 # the bridge resolves them from this package's share.
 
+# Match the yaw on the root joint (root -> base) to reorient the heading. Group 1
+# keeps the opening tag and the xyz origin; the trailing rp=".." is replaced. Any
+# whitespace between attributes is tolerated so a re-export cannot break the match.
+_AXOL_ROOT_JOINT_RE = re.compile(
+    r'(<joint name="fixed_node_to_root_joint_0"[^>]*>\s*<origin xyz="[^"]*")\s*rpy="[^"]*"'
+)
+
 
 def _build_axol(share, variant):
     """Load the flat Axol URDF and rewrite its package:// meshes to fm_description."""
@@ -154,9 +161,27 @@ def _build_axol(share, variant):
     # Rewrite the exported "assembly" package to this package's share so Foxglove
     # fetches the meshes via the bridge. The meshes live under
     # axol_description/meshes/ (installed by CMakeLists).
-    return robot_description.replace(
+    robot_description = robot_description.replace(
         'filename="package://assembly/',
         f'filename="package://{PKG}/axol_description/',
+    )
+
+    # Rename the robot. The Onshape export names the URDF after its assembly
+    # document ("assembly"); every other robot's URDF names itself after the
+    # robot (G1_D, so101_new_calib, openarm_v20). Rename to "axol" so the
+    # published /robot_description is consistent.
+    robot_description = robot_description.replace(
+        '<robot name="assembly">', '<robot name="axol">'
+    )
+
+    # Reorient the heading. The Onshape export lays the robot out facing -Y, so
+    # it renders 90 degrees clockwise about Z relative to every other robot (ROS
+    # convention is +X forward). The tree hangs off the fixed root joint
+    # `root -> base`, which the export leaves at zero yaw; set its yaw to +90
+    # degrees to rotate the whole robot anti-clockwise back to +X forward. Anchor
+    # on the joint name (not its float xyz) so a re-export cannot silently no-op.
+    return _AXOL_ROOT_JOINT_RE.sub(
+        r'\1 rpy="0 0 1.5707963267948966"', robot_description
     )
 
 
