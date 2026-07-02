@@ -174,14 +174,15 @@ void So101TaskEnvPlugin::publish_markers(const mjData * data)
   msg.markers.clear();
   msg.markers.reserve(tracked_markers_.size());
 
-  const auto stamp = rclcpp::Time(
-    static_cast<rcl_time_point_value_t>(std::max(0.0, data->time) * 1e9),
-    RCL_ROS_TIME);
+  const auto stamp_nanoseconds = static_cast<int64_t>(std::max(0.0, data->time) * 1e9);
+  builtin_interfaces::msg::Time stamp_msg;
+  stamp_msg.sec = static_cast<int32_t>(stamp_nanoseconds / 1000000000LL);
+  stamp_msg.nanosec = static_cast<uint32_t>(stamp_nanoseconds % 1000000000LL);
 
   for (std::size_t i = 0; i < tracked_markers_.size(); ++i) {
     const auto & tracked = tracked_markers_[i];
     auto marker = marker_from_spec(tracked.spec, frame_id_, static_cast<int>(i));
-    marker.header.stamp = stamp.to_msg();
+    marker.header.stamp = stamp_msg;
 
     if (tracked.body_id >= 0) {
       apply_mujoco_pose(
