@@ -116,7 +116,9 @@ def test_stale_output_is_regenerated(conv, tmp_path):
     src = _box(tmp_path / "link.obj", (0.10, 0.10, 0.20))
     out = tmp_path / "link.stl"
     assert conv._convert_one(src, out) is True
-    # Source newer than the existing output → reconvert.
-    future = _SCRIPT.stat().st_mtime + 100
+    # Source newer than the existing output → reconvert. Anchor to the output's own
+    # mtime, not the script's: on a slow build the output is written well over 100 s
+    # after checkout, so a script-relative offset can land before it and wrongly skip.
+    future = out.stat().st_mtime + 100
     os.utime(src, (future, future))
     assert conv._convert_one(src, out) is True
