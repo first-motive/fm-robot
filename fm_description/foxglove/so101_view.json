@@ -36,7 +36,7 @@
         "poseEstimateTopic": "/initialpose"
       }
     },
-    "first-motive.fm-teleop.First Motive Joint State Publisher!jsp": {
+    "firstmotive.fm-teleop.First Motive Joint State Publisher!jsp": {
       "topic": "/joint_command"
     }
   },
@@ -47,7 +47,7 @@
   },
   "layout": {
     "first": "3D!so101",
-    "second": "first-motive.fm-teleop.First Motive Joint State Publisher!jsp",
+    "second": "firstmotive.fm-teleop.First Motive Joint State Publisher!jsp",
     "direction": "row",
     "splitPercentage": 65
   }
