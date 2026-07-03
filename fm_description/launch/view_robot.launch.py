@@ -410,7 +410,8 @@ def _launch_setup(context, *args, **kwargs):
     variant = LaunchConfiguration("variant").perform(context)
     use_foxglove = LaunchConfiguration("use_foxglove").perform(context) == "true"
     use_rviz = LaunchConfiguration("use_rviz")
-    use_jsp = LaunchConfiguration("use_jsp")
+    use_jsp = LaunchConfiguration("use_jsp").perform(context) == "true"
+    use_jsp_gui = LaunchConfiguration("use_jsp_gui").perform(context) == "true"
     panel_topic = LaunchConfiguration("panel_topic").perform(context)
 
     entry = ROBOTS.get(robot)
@@ -444,6 +445,38 @@ def _launch_setup(context, *args, **kwargs):
     rviz_config = _resolve_rviz_config(entry, variant, share)
     rviz_args = ["-d", rviz_config] if rviz_config else []
 
+    # At most one joint-state publisher runs, and it is the SOLE publisher of
+    # /joint_states. Headless joint_state_publisher (jsp) is the default; when
+    # use_jsp_gui is set it is REPLACED by joint_state_publisher_gui, a jsp
+    # superset that adds a native slider window (the RViz joint-control path,
+    # since RViz2 has no joint panel of its own). use_jsp_gui is an explicit
+    # request for the gui, so it wins over use_jsp — the two are never both live.
+    # Both take the same params:
+    #   - source_list=[panel_topic] subscribes to the Foxglove panel's
+    #     /joint_command so the panel drives joints WITHOUT publishing
+    #     /joint_states itself (two publishers race; the robot flips between
+    #     poses). jsp holds the last value and republishes one consistent stream.
+    #   - zeros seeds the home pose so the first /joint_states message is upright.
+    # use_jsp:=false use_jsp_gui:=false runs neither (intentional opt-out), so the
+    # single-publisher invariant holds on either viewer path.
+    joint_pub = None
+    if use_jsp_gui:
+        joint_pub = Node(
+            package="joint_state_publisher_gui",
+            executable="joint_state_publisher_gui",
+            name="joint_state_publisher_gui",
+            output="screen",
+            parameters=[jsp_params],
+        )
+    elif use_jsp:
+        joint_pub = Node(
+            package="joint_state_publisher",
+            executable="joint_state_publisher",
+            name="joint_state_publisher",
+            output="screen",
+            parameters=[jsp_params],
+        )
+
     nodes = [
         Node(
             package="robot_state_publisher",
@@ -451,22 +484,6 @@ def _launch_setup(context, *args, **kwargs):
             name="robot_state_publisher",
             output="screen",
             parameters=[{"robot_description": robot_description}],
-        ),
-        # joint_state_publisher is the SOLE publisher of /joint_states. It seeds a
-        # default pose so movable joints get TF without any interactive client, and
-        # subscribes to `panel_topic` via source_list so Foxglove's Joint State
-        # Publisher panel drives the joints WITHOUT publishing /joint_states itself.
-        # Point the panel at /joint_command (not the default /joint_states): two
-        # publishers on /joint_states race and the robot flips between poses. With
-        # source_list, jsp holds the last panel value and republishes one consistent
-        # /joint_states — no flip-flop.
-        Node(
-            package="joint_state_publisher",
-            executable="joint_state_publisher",
-            name="joint_state_publisher",
-            output="screen",
-            condition=IfCondition(use_jsp),
-            parameters=[jsp_params],
         ),
         Node(
             package="rviz2",
@@ -477,6 +494,10 @@ def _launch_setup(context, *args, **kwargs):
             condition=IfCondition(use_rviz),
         ),
     ]
+
+    # The chosen joint-state publisher (jsp or jsp_gui), when enabled.
+    if joint_pub is not None:
+        nodes.append(joint_pub)
 
     if use_foxglove:
         nodes.append(
@@ -525,7 +546,17 @@ def generate_launch_description():
             DeclareLaunchArgument(
                 "use_jsp",
                 default_value="true",
-                description="Start joint_state_publisher so non-fixed joints get TF.",
+                description="Start a joint-state publisher so non-fixed joints get TF.",
+            ),
+            DeclareLaunchArgument(
+                "use_jsp_gui",
+                default_value="false",
+                description=(
+                    "Replace headless joint_state_publisher with "
+                    "joint_state_publisher_gui (native slider window) — the RViz "
+                    "joint-control path. Wins over use_jsp; the two never run "
+                    "together, so /joint_states keeps a single publisher."
+                ),
             ),
             DeclareLaunchArgument(
                 "panel_topic",
