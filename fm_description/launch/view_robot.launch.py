@@ -46,6 +46,7 @@ import os
 import re
 
 import xacro
+import yaml
 
 from ament_index_python.packages import (
     get_package_share_directory,
@@ -62,6 +63,28 @@ PKG = "fm_description"
 
 # Default foxglove_bridge parameters. Entries may extend (never shrink) these.
 _DEFAULT_BRIDGE_PARAMS = {"port": 8765, "address": "0.0.0.0"}
+
+# Home poses keyed robot -> variant -> {joint: radians}, installed into this
+# package's share by CMakeLists. Only non-zero overrides are listed; jsp defaults
+# every other movable joint to zero.
+_HOME_POSES_REL = os.path.join("config", "home_poses.yaml")
+
+
+def _load_home_pose(share, robot, variant):
+    """Return the {joint: radians} home pose for robot/variant, or {} if none.
+
+    A missing file, robot, or variant yields an empty pose — jsp then defaults
+    every joint to zero, which is the correct rest pose for robots that omit an
+    entry. Passed to jsp as its `zeros` param so the first /joint_states message
+    already holds the pose.
+    """
+    path = os.path.join(share, _HOME_POSES_REL)
+    if not os.path.isfile(path):
+        return {}
+    with open(path, "r") as f:
+        poses = yaml.safe_load(f) or {}
+    return poses.get(robot, {}).get(variant, {})
+
 
 # --- G1 -------------------------------------------------------------------
 
@@ -402,6 +425,19 @@ def _launch_setup(context, *args, **kwargs):
     share = get_package_share_directory(PKG)
     robot_description = entry["build_description"](share, variant)
 
+    # Home pose for this robot/variant. Passed to jsp as `zeros` so its first
+    # /joint_states message already holds the pose (no post-hoc repositioning).
+    # Empty for robots that omit an entry — jsp then defaults every joint to zero.
+    home_pose = _load_home_pose(share, robot, variant)
+    # Only include `zeros` when the pose is non-empty. launch_ros flattens a dict
+    # param into zeros.<joint> entries; an empty dict is a value of ambiguous type.
+    jsp_params = {
+        "robot_description": robot_description,
+        "source_list": [panel_topic],
+    }
+    if home_pose:
+        jsp_params["zeros"] = home_pose
+
     # Load the robot's saved RViz view (Fixed Frame + framed Orbit camera) when
     # one exists; otherwise RViz opens bare. Foxglove reads its layout host-side,
     # so only RViz is wired here.
@@ -430,12 +466,7 @@ def _launch_setup(context, *args, **kwargs):
             name="joint_state_publisher",
             output="screen",
             condition=IfCondition(use_jsp),
-            parameters=[
-                {
-                    "robot_description": robot_description,
-                    "source_list": [panel_topic],
-                }
-            ],
+            parameters=[jsp_params],
         ),
         Node(
             package="rviz2",

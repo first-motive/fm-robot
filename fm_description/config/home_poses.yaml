@@ -1,0 +1,25 @@
+# Home poses for the description-view path (view_robot.launch.py).
+#
+# Keyed robot -> variant -> {joint_name: radians}. view_robot.launch.py loads
+# this and passes the matched pose to joint_state_publisher as its `zeros`
+# parameter, so jsp's very first /joint_states message already holds the pose —
+# no interactive client, no post-hoc repositioning, nothing to flicker against.
+#
+# NON-ZERO OVERRIDES ONLY. jsp already defaults every movable joint to zero, and
+# for most robots model-zero is the correct rest pose. List a joint here only
+# where zero is wrong. A robot or variant absent from this file loads all-zero,
+# which is intended — do not add all-zero blocks.
+#
+# g1_29dof_rev_1_0: the 29-DOF bipedal G1 loads awkwardly at model-zero — the
+# arms sit against the torso with no shoulder abduction. These values relax the
+# arms into a natural at-sides stance (slight shoulder abduction + elbow bend);
+# the legs and waist stay at zero (straight upright stand). Verify visually with
+# the Test Plan step in the plan before trusting the exact angles.
+g1_d:
+  g1_29dof_rev_1_0:
+    left_shoulder_pitch_joint: 0.2
+    left_shoulder_roll_joint: 0.2
+    left_elbow_joint: 0.4
+    right_shoulder_pitch_joint: 0.2
+    right_shoulder_roll_joint: -0.2
+    right_elbow_joint: 0.4
