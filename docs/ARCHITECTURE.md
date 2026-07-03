@@ -1,6 +1,6 @@
 # Architecture
 
-The robot layer of First Motive's ROS2 (Humble) stack: the packages that
+The robot layer of First Motive's ROS2 stack: the packages that
 describe and drive the physical robot. Three concerns stack one on the next —
 **description** is the foundation, **control** sits on it, and the **hardware
 abstraction** lets the same control stack drive a mock, three simulators, or real
