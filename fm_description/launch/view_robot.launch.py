@@ -40,6 +40,15 @@ Each entry exposes:
                      frame at a working distance instead of an empty scene. The
                      matching Foxglove layouts live under foxglove/ and are
                      imported host-side in Foxglove Studio (Layouts -> import).
+
+Joint control: exactly one joint-state publisher runs and it is the SOLE
+publisher of /joint_states. Headless joint_state_publisher is the default,
+seeded at the robot's home pose (config/home_poses.yaml -> its `zeros` param) and
+subscribed to /joint_command via source_list so the Foxglove Joint State
+Publisher panel drives the joints without racing it. use_jsp_gui:=true swaps it
+for joint_state_publisher_gui (a native slider window) on the rviz path. This is
+the description-view path only — never add a standalone jsp against sim.launch.py,
+where joint_state_broadcaster owns /joint_states.
 """
 
 import os
