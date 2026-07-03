@@ -119,6 +119,30 @@ Common launch args (every robot):
 An unknown `--robot` key (shell) or `robot:=` value (launch) fails loud, listing
 the valid keys.
 
+### Saved Views
+
+Each robot ships a saved default view for both viewers: base frame selected, an
+Orbit camera at a working distance, `/robot_description` visible. The files live
+under this package's share (`rviz/`, `foxglove/`).
+
+| `--robot` (variant) | Base frame | RViz | Foxglove |
+|---------------------|------------|------|----------|
+| `g1_d` | `AGV_link` | `rviz/g1_d.rviz` | `foxglove/g1_d_view.json` |
+| `g1_d` (`g1_29dof_rev_1_0`) | `pelvis` | `rviz/g1_29dof.rviz` | `foxglove/g1_29dof_view.json` |
+| `so101` | `base_link` | `rviz/so101.rviz` | `foxglove/so101_view.json` |
+| `axol` | `base` | `rviz/axol.rviz` | `foxglove/axol_view.json` |
+| `openarm` | `openarm_right_base_link` | `rviz/openarm.rviz` | `foxglove/openarm_view.json` |
+
+- **RViz** loads its view automatically. `use_rviz:=true` picks the config for the
+  selected `robot`/`variant` and starts `rviz2 -d`; an unmapped variant opens bare
+  RViz rather than failing the launch.
+- **Foxglove** reads its layout host-side, so import it once in Foxglove Studio
+  (Layouts → import from file). The layout pre-sets the 3D panel: Z-up meshes,
+  follow the base frame, `/robot_description` visible.
+- Add the **Joint State Publisher** panel by hand to drive movable joints — point
+  it at `/joint_command` (see the flip-flop gotcha below). The teleop views under
+  `fm_teleop_vision` add a camera panel on the vision image topic.
+
 ### Mesh Resolution
 
 Every registry entry rewrites its mesh references to `package://fm_description/...`
@@ -147,9 +171,10 @@ over-rotated. This is a display setting, not a URDF/TF issue (RViz is unaffected
 3D panel → settings → Scene → Mesh "up" axis → Z-up   (then Ctrl-R to refresh)
 ```
 
-To skip this each time, import the ready-made layout `foxglove/g1_view.json`
-(Foxglove Studio → Layouts → import from file). It pre-sets the 3D panel: Z-up
-meshes, follow `AGV_link`, `/robot_description` visible.
+To skip this each time, import the robot's ready-made layout under `foxglove/`
+(e.g. `foxglove/g1_d_view.json`; see [Saved Views](#saved-views) for the full
+list). Each pre-sets the 3D panel: Z-up meshes, follow the base frame,
+`/robot_description` visible.
 
 ### Foxglove Gotcha: Joint State Publisher Panel Flips Between Poses
 

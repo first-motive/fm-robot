@@ -35,6 +35,11 @@ Each entry exposes:
   - default_variant  used when the `variant` arg is empty
   - build_description (share, variant) -> urdf_xml callable
   - bridge_params    merged into the foxglove_bridge node's parameters
+  - rviz_config      basename of the saved view under this package's rviz/ share.
+                     Loaded with `rviz2 -d` so RViz opens on the robot's base
+                     frame at a working distance instead of an empty scene. The
+                     matching Foxglove layouts live under foxglove/ and are
+                     imported host-side in Foxglove Studio (Layouts -> import).
 """
 
 import os
@@ -320,32 +325,61 @@ _OPENARM_BRIDGE_PARAMS = {
 
 # --- Registry -------------------------------------------------------------
 
+# RViz view configs live under this package's rviz/ share (installed by
+# CMakeLists). Each sets Fixed Frame to the robot's base link and an Orbit camera
+# at a working distance. The g1_d entry serves two bodies with different roots
+# (wheeled AGV_link vs bipedal pelvis), so its config is keyed by variant; an
+# unmapped variant falls back to bare RViz. The other entries share one root
+# across variants, so a plain basename covers them.
 ROBOTS = {
     "g1_d": {
         "label": "Unitree G1 (G1-D)",
         "default_variant": "g1_d",
         "build_description": _build_g1,
         "bridge_params": _DEFAULT_BRIDGE_PARAMS,
+        "rviz_config": {
+            "g1_d": "g1_d.rviz",
+            "g1_29dof_rev_1_0": "g1_29dof.rviz",
+        },
     },
     "so101": {
         "label": "LeRobot SO101",
         "default_variant": "so101",
         "build_description": _build_so101,
         "bridge_params": _DEFAULT_BRIDGE_PARAMS,
+        "rviz_config": "so101.rviz",
     },
     "axol": {
         "label": "Almond Bot Axol",
         "default_variant": "bimanual",
         "build_description": _build_axol,
         "bridge_params": _DEFAULT_BRIDGE_PARAMS,
+        "rviz_config": "axol.rviz",
     },
     "openarm": {
         "label": "Enactic OpenArm",
         "default_variant": "right_arm",
         "build_description": _build_openarm,
         "bridge_params": _OPENARM_BRIDGE_PARAMS,
+        "rviz_config": "openarm.rviz",
     },
 }
+
+
+def _resolve_rviz_config(entry, variant, share):
+    """Return the absolute path to the entry's RViz view, or None.
+
+    The registry value is a basename shared across variants, or a dict mapping
+    variant -> basename when one robot key serves multiple roots. A missing key
+    or absent file yields None so RViz opens bare rather than failing the launch.
+    """
+    config = entry.get("rviz_config")
+    if isinstance(config, dict):
+        config = config.get(variant)
+    if not config:
+        return None
+    path = os.path.join(share, "rviz", config)
+    return path if os.path.isfile(path) else None
 
 
 def _launch_setup(context, *args, **kwargs):
@@ -367,6 +401,12 @@ def _launch_setup(context, *args, **kwargs):
 
     share = get_package_share_directory(PKG)
     robot_description = entry["build_description"](share, variant)
+
+    # Load the robot's saved RViz view (Fixed Frame + framed Orbit camera) when
+    # one exists; otherwise RViz opens bare. Foxglove reads its layout host-side,
+    # so only RViz is wired here.
+    rviz_config = _resolve_rviz_config(entry, variant, share)
+    rviz_args = ["-d", rviz_config] if rviz_config else []
 
     nodes = [
         Node(
@@ -402,6 +442,7 @@ def _launch_setup(context, *args, **kwargs):
             executable="rviz2",
             name="rviz2",
             output="screen",
+            arguments=rviz_args,
             condition=IfCondition(use_rviz),
         ),
     ]

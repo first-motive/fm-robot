@@ -4,7 +4,7 @@ project(fm_description)
 find_package(ament_cmake REQUIRED)
 
 install(
-  DIRECTORY urdf meshes launch
+  DIRECTORY urdf meshes launch rviz foxglove
   DESTINATION share/${PROJECT_NAME}
 )
 
