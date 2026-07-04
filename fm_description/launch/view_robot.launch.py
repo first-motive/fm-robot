@@ -40,12 +40,24 @@ Each entry exposes:
                      frame at a working distance instead of an empty scene. The
                      matching Foxglove layouts live under foxglove/ and are
                      imported host-side in Foxglove Studio (Layouts -> import).
+
+Joint control: exactly one joint-state publisher runs and it is the SOLE
+publisher of /joint_states. Headless joint_state_publisher is the default,
+seeded at the robot's home pose (config/home_poses.yaml -> its `zeros` param) and
+subscribed to /joint_command via source_list so the Foxglove Joint State
+Publisher panel drives the joints without racing it. The rviz path (use_rviz)
+swaps it for joint_state_publisher_gui (a native slider window) automatically,
+since use_jsp_gui defaults to "auto" and follows the viewer — every frontend gets
+the right joint control from the viewer choice alone. This is the description-view
+path only — never add a standalone jsp against sim.launch.py, where
+joint_state_broadcaster owns /joint_states.
 """
 
 import os
 import re
 
 import xacro
+import yaml
 
 from ament_index_python.packages import (
     get_package_share_directory,
@@ -54,7 +66,6 @@ from ament_index_python.packages import (
 
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, OpaqueFunction
-from launch.conditions import IfCondition
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 
@@ -62,6 +73,29 @@ PKG = "fm_description"
 
 # Default foxglove_bridge parameters. Entries may extend (never shrink) these.
 _DEFAULT_BRIDGE_PARAMS = {"port": 8765, "address": "0.0.0.0"}
+
+# Home poses keyed robot -> variant -> {joint: radians}, installed into this
+# package's share by CMakeLists. Only non-zero overrides are listed; jsp defaults
+# every other movable joint to zero.
+_HOME_POSES_REL = os.path.join("config", "home_poses.yaml")
+
+
+def _load_home_pose(share, robot, variant):
+    """
+    Return the {joint: radians} home pose for robot/variant, or {} if none.
+
+    A missing file, robot, or variant yields an empty pose — jsp then defaults
+    every joint to zero, which is the correct rest pose for robots that omit an
+    entry. Passed to jsp as its `zeros` param so the first /joint_states message
+    already holds the pose.
+    """
+    path = os.path.join(share, _HOME_POSES_REL)
+    if not os.path.isfile(path):
+        return {}
+    with open(path, "r") as f:
+        poses = yaml.safe_load(f) or {}
+    return poses.get(robot, {}).get(variant, {})
+
 
 # --- G1 -------------------------------------------------------------------
 
@@ -367,7 +401,8 @@ ROBOTS = {
 
 
 def _resolve_rviz_config(entry, variant, share):
-    """Return the absolute path to the entry's RViz view, or None.
+    """
+    Return the absolute path to the entry's RViz view, or None.
 
     The registry value is a basename shared across variants, or a dict mapping
     variant -> basename when one robot key serves multiple roots. A missing key
@@ -386,9 +421,27 @@ def _launch_setup(context, *args, **kwargs):
     robot = LaunchConfiguration("robot").perform(context)
     variant = LaunchConfiguration("variant").perform(context)
     use_foxglove = LaunchConfiguration("use_foxglove").perform(context) == "true"
-    use_rviz = LaunchConfiguration("use_rviz")
-    use_jsp = LaunchConfiguration("use_jsp")
+    use_rviz = LaunchConfiguration("use_rviz").perform(context) == "true"
+    use_jsp = LaunchConfiguration("use_jsp").perform(context) == "true"
     panel_topic = LaunchConfiguration("panel_topic").perform(context)
+
+    # Resolve which joint-state publisher runs, if any, into (run_jsp, use_gui):
+    #   run_jsp  a publisher runs at all
+    #   use_gui  it is joint_state_publisher_gui (native sliders) vs headless jsp
+    # use_jsp_gui defaults to "auto": follow the viewer. RViz has no joint panel
+    # of its own, so the rviz path needs the gui; the foxglove path keeps headless
+    # jsp and drives joints from the in-panel Joint State Publisher. Deriving this
+    # here — not in each frontend — means every entryway (TUI, CLI, run.sh, FM
+    # Desktop) gets the right joint control from the viewer choice alone. auto
+    # respects use_jsp (so use_jsp:=false still runs nothing). Explicit "true"
+    # forces the gui even over use_jsp:=false; "false" forces headless.
+    raw_jsp_gui = LaunchConfiguration("use_jsp_gui").perform(context).strip().lower()
+    if raw_jsp_gui == "true":
+        run_jsp, use_gui = True, True
+    elif raw_jsp_gui == "false":
+        run_jsp, use_gui = use_jsp, False
+    else:  # auto
+        run_jsp, use_gui = use_jsp, (use_jsp and use_rviz)
 
     entry = ROBOTS.get(robot)
     if entry is None:
@@ -402,11 +455,52 @@ def _launch_setup(context, *args, **kwargs):
     share = get_package_share_directory(PKG)
     robot_description = entry["build_description"](share, variant)
 
+    # Home pose for this robot/variant. Passed to jsp as `zeros` so its first
+    # /joint_states message already holds the pose (no post-hoc repositioning).
+    # Empty for robots that omit an entry — jsp then defaults every joint to zero.
+    home_pose = _load_home_pose(share, robot, variant)
+    # Only include `zeros` when the pose is non-empty. launch_ros flattens a dict
+    # param into zeros.<joint> entries; an empty dict is a value of ambiguous type.
+    jsp_params = {
+        "robot_description": robot_description,
+        "source_list": [panel_topic],
+    }
+    if home_pose:
+        jsp_params["zeros"] = home_pose
+
     # Load the robot's saved RViz view (Fixed Frame + framed Orbit camera) when
     # one exists; otherwise RViz opens bare. Foxglove reads its layout host-side,
     # so only RViz is wired here.
     rviz_config = _resolve_rviz_config(entry, variant, share)
     rviz_args = ["-d", rviz_config] if rviz_config else []
+
+    # At most one joint-state publisher runs (resolved above into run_jsp +
+    # use_gui), and it is the SOLE publisher of /joint_states. Headless jsp and
+    # jsp_gui are mutually exclusive by construction — never both — so the
+    # single-publisher invariant holds on either viewer path. Both take the same
+    # params:
+    #   - source_list=[panel_topic] subscribes to the Foxglove panel's
+    #     /joint_command so the panel drives joints WITHOUT publishing
+    #     /joint_states itself (two publishers race; the robot flips between
+    #     poses). jsp holds the last value and republishes one consistent stream.
+    #   - zeros seeds the home pose so the first /joint_states message is upright.
+    joint_pub = None
+    if run_jsp and use_gui:
+        joint_pub = Node(
+            package="joint_state_publisher_gui",
+            executable="joint_state_publisher_gui",
+            name="joint_state_publisher_gui",
+            output="screen",
+            parameters=[jsp_params],
+        )
+    elif run_jsp:
+        joint_pub = Node(
+            package="joint_state_publisher",
+            executable="joint_state_publisher",
+            name="joint_state_publisher",
+            output="screen",
+            parameters=[jsp_params],
+        )
 
     nodes = [
         Node(
@@ -416,36 +510,22 @@ def _launch_setup(context, *args, **kwargs):
             output="screen",
             parameters=[{"robot_description": robot_description}],
         ),
-        # joint_state_publisher is the SOLE publisher of /joint_states. It seeds a
-        # default pose so movable joints get TF without any interactive client, and
-        # subscribes to `panel_topic` via source_list so Foxglove's Joint State
-        # Publisher panel drives the joints WITHOUT publishing /joint_states itself.
-        # Point the panel at /joint_command (not the default /joint_states): two
-        # publishers on /joint_states race and the robot flips between poses. With
-        # source_list, jsp holds the last panel value and republishes one consistent
-        # /joint_states — no flip-flop.
-        Node(
-            package="joint_state_publisher",
-            executable="joint_state_publisher",
-            name="joint_state_publisher",
-            output="screen",
-            condition=IfCondition(use_jsp),
-            parameters=[
-                {
-                    "robot_description": robot_description,
-                    "source_list": [panel_topic],
-                }
-            ],
-        ),
-        Node(
-            package="rviz2",
-            executable="rviz2",
-            name="rviz2",
-            output="screen",
-            arguments=rviz_args,
-            condition=IfCondition(use_rviz),
-        ),
     ]
+
+    if use_rviz:
+        nodes.append(
+            Node(
+                package="rviz2",
+                executable="rviz2",
+                name="rviz2",
+                output="screen",
+                arguments=rviz_args,
+            )
+        )
+
+    # The chosen joint-state publisher (jsp or jsp_gui), when enabled.
+    if joint_pub is not None:
+        nodes.append(joint_pub)
 
     if use_foxglove:
         nodes.append(
@@ -494,7 +574,18 @@ def generate_launch_description():
             DeclareLaunchArgument(
                 "use_jsp",
                 default_value="true",
-                description="Start joint_state_publisher so non-fixed joints get TF.",
+                description="Start a joint-state publisher so non-fixed joints get TF.",
+            ),
+            DeclareLaunchArgument(
+                "use_jsp_gui",
+                default_value="auto",
+                description=(
+                    "auto (default) follows the viewer: rviz gets "
+                    "joint_state_publisher_gui (native sliders), foxglove keeps "
+                    "headless joint_state_publisher (driven by the in-panel Joint "
+                    "State Publisher). true/false force it. Wins over use_jsp; the "
+                    "two never run together, so /joint_states keeps one publisher."
+                ),
             ),
             DeclareLaunchArgument(
                 "panel_topic",

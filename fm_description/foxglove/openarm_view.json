@@ -35,6 +35,9 @@
         "pointTopic": "/clicked_point",
         "poseEstimateTopic": "/initialpose"
       }
+    },
+    "firstmotive.fm-teleop.First Motive Joint State Publisher!jsp": {
+      "topic": "/joint_command"
     }
   },
   "globalVariables": {},
@@ -42,5 +45,10 @@
   "playbackConfig": {
     "speed": 1
   },
-  "layout": "3D!openarm"
+  "layout": {
+    "first": "3D!openarm",
+    "second": "firstmotive.fm-teleop.First Motive Joint State Publisher!jsp",
+    "direction": "row",
+    "splitPercentage": 65
+  }
 }
