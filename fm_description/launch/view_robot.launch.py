@@ -81,7 +81,8 @@ _HOME_POSES_REL = os.path.join("config", "home_poses.yaml")
 
 
 def _load_home_pose(share, robot, variant):
-    """Return the {joint: radians} home pose for robot/variant, or {} if none.
+    """
+    Return the {joint: radians} home pose for robot/variant, or {} if none.
 
     A missing file, robot, or variant yields an empty pose — jsp then defaults
     every joint to zero, which is the correct rest pose for robots that omit an
@@ -400,7 +401,8 @@ ROBOTS = {
 
 
 def _resolve_rviz_config(entry, variant, share):
-    """Return the absolute path to the entry's RViz view, or None.
+    """
+    Return the absolute path to the entry's RViz view, or None.
 
     The registry value is a basename shared across variants, or a dict mapping
     variant -> basename when one robot key serves multiple roots. A missing key
