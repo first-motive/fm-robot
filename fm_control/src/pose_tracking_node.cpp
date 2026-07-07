@@ -89,10 +89,17 @@ int main(int argc, char ** argv)
   psm->startSceneMonitor();
   psm->startStateMonitor(servo_parameters->joint_topic);
 
-  if (!psm->waitForCurrentRobotState(node->now(), 10.0)) {
+  // Cold-start deadline for the first robot state. waitForCurrentRobotState returns as soon as a
+  // complete /joint_states arrives, so this bounds only the slow-boot case: a cold MuJoCo start on
+  // macOS/CPU can take longer than the old fixed 10 s to spawn the controllers and publish the
+  // first state, and vision_session.launch.py starts this node alongside the sim. A param (default
+  // 30 s) lets a slower host raise it per-launch instead of recompiling; it still fails FATAL on a
+  // genuinely dead pipeline.
+  const double cold_start_timeout = node->declare_parameter<double>("cold_start_timeout", 30.0);
+  if (!psm->waitForCurrentRobotState(node->now(), cold_start_timeout)) {
     RCLCPP_FATAL(
-      logger, "Timed out waiting for a current robot state on '%s'.",
-      servo_parameters->joint_topic.c_str());
+      logger, "Timed out after %.1fs waiting for a current robot state on '%s'.",
+      cold_start_timeout, servo_parameters->joint_topic.c_str());
     rclcpp::shutdown();
     return EXIT_FAILURE;
   }
