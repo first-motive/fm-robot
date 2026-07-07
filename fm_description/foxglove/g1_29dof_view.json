@@ -45,6 +45,7 @@
   "playbackConfig": {
     "speed": 1
   },
+  "leftSidebarOpen": false,
   "layout": {
     "first": "3D!g1_29dof",
     "second": "firstmotive.fm-teleop.First Motive Joint State Publisher!jsp",
