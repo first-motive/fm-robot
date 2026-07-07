@@ -89,7 +89,10 @@ int main(int argc, char ** argv)
   psm->startSceneMonitor();
   psm->startStateMonitor(servo_parameters->joint_topic);
 
-  if (!psm->waitForCurrentRobotState(node->now(), 10.0)) {
+  // 30 s (was 10): a cold MuJoCo start on macOS/CPU can take longer than 10 s to spawn the
+  // controllers and publish the first /joint_states, and vision_session.launch.py starts this
+  // node alongside the sim. A longer wait avoids a spurious FATAL exit on a slow first boot.
+  if (!psm->waitForCurrentRobotState(node->now(), 30.0)) {
     RCLCPP_FATAL(
       logger, "Timed out waiting for a current robot state on '%s'.",
       servo_parameters->joint_topic.c_str());
