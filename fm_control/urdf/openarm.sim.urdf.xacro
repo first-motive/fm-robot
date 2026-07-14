@@ -59,8 +59,20 @@ Args:
                 if preset_cfg[n]['type'] == 'robot'
                 and preset_cfg[n]['config'] == 'arm'
                 and preset_cfg[n]['enabled']]}"/>
+  <!-- mirror_sign is the preset's sagittal reflect on Y (+1 for a base arm, -1 for the
+       mirrored arm). The left arm is the right reflected about the XZ plane, so equal joint
+       angles would tilt both arms the SAME world direction; the reflected joints must be
+       sign-flipped by mirror_sign to spawn as a true mirror. Applied in openarm_arm_system.
+       `ready` is the RIGHT-arm spawn joint vector: for a bimanual preset (2+ arms) a
+       "hands forward, ~20cm apart" pre-grasp pose so the 1:1 mirror's engage baseline matches
+       a natural two-hand start; for a single arm the original splayed bent-ready pose. -->
+  <xacro:property name="ready_bimanual" value="${[0.6816, 0.0265, -0.3161, 1.1622, 0.0, 0.3, 0.0]}"/>
+  <xacro:property name="ready_single" value="${[0.0, 0.5, 0.0, 1.2, 0.0, 0.3, 0.0]}"/>
   <xacro:property name="arm_specs"
       value="${[dict(prefix=preset_cfg[n]['prefix'],
+                     ready=[(preset_cfg[n].get('reflect', dict()).get('y', 1) if i != 3 else 1)
+                            * (ready_bimanual if len(arm_names) > 1 else ready_single)[i]
+                            for i in python.range(7)],
                      hand=len([m for m in components
                                if preset_cfg[m]['type'] == 'end_effector'
                                and preset_cfg[m]['enabled']
