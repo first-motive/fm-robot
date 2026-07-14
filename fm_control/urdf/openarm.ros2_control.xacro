@@ -102,6 +102,7 @@ arm prefix, e.g. openarm_right_.
        plus finger_joint1 when the arm carries a gripper. -->
   <xacro:macro name="openarm_arm_system"
       params="prefix hand sim_backend control_gains
+              init1 init2 init3 init4 init5 init6 init7
               can_interface:=can0 can_fd:=true
               isaac_joint_commands_topic:=/isaac_joint_commands
               isaac_joint_states_topic:=/isaac_joint_states">
@@ -120,14 +121,25 @@ arm prefix, e.g. openarm_right_.
            = 0, so a zeros spawn sits AT the joint limit AND fully extended (a kinematic
            singularity) — MoveIt Servo then emergency-stops every cycle and refuses to
            jog (logs "close to a position limit. Halting" + "Very close to a singularity").
-           A bent elbow lifts it off both. initial_value is applied by the sim hardware. -->
-      <xacro:openarm_joint joint_name="${prefix}joint1"/>
-      <xacro:openarm_joint joint_name="${prefix}joint2" initial_position="0.5"/>
-      <xacro:openarm_joint joint_name="${prefix}joint3"/>
-      <xacro:openarm_joint joint_name="${prefix}joint4" initial_position="1.2"/>
-      <xacro:openarm_joint joint_name="${prefix}joint5"/>
-      <xacro:openarm_joint joint_name="${prefix}joint6" initial_position="0.3"/>
-      <xacro:openarm_joint joint_name="${prefix}joint7"/>
+           A bent elbow lifts it off both. initial_value is applied by the sim hardware.
+
+           `ready` is the RIGHT-arm ready joint vector (per preset, from openarm.sim.urdf.xacro):
+           the single-arm splayed pose, or the bimanual "hands forward, ~20cm apart" pre-grasp
+           pose (so the 1:1 mirror's engage baseline matches a natural two-hand start instead
+           of the arms being ~59cm apart). mirror_sign flips the reflected (left) arm's ready
+           pose so both arms spawn as sagittal mirror images: the left arm is the right reflected
+           about Y with joint AXES pointing the SAME world direction (the reflect macro mirrors
+           joint ORIGINS, not axes), so by the mirror identity M*R(a,q)*M = R(M*a,-q) the
+           reflected joints {1,2,3,5,6,7} need NEGATED angles; joint4 (excluded from the reflect)
+           keeps its sign. The per-joint initN are the FINAL (mirror-applied) spawn angles,
+           computed per arm in openarm.sim.urdf.xacro's arm_specs. -->
+      <xacro:openarm_joint joint_name="${prefix}joint1" initial_position="${init1}"/>
+      <xacro:openarm_joint joint_name="${prefix}joint2" initial_position="${init2}"/>
+      <xacro:openarm_joint joint_name="${prefix}joint3" initial_position="${init3}"/>
+      <xacro:openarm_joint joint_name="${prefix}joint4" initial_position="${init4}"/>
+      <xacro:openarm_joint joint_name="${prefix}joint5" initial_position="${init5}"/>
+      <xacro:openarm_joint joint_name="${prefix}joint6" initial_position="${init6}"/>
+      <xacro:openarm_joint joint_name="${prefix}joint7" initial_position="${init7}"/>
 
       <xacro:if value="${hand}">
         <xacro:openarm_joint joint_name="${prefix}finger_joint1"/>
@@ -145,6 +157,9 @@ arm prefix, e.g. openarm_right_.
       <xacro:openarm_arm_system
           prefix="${spec['prefix']}"
           hand="${spec['hand']}"
+          init1="${spec['ready'][0]}" init2="${spec['ready'][1]}" init3="${spec['ready'][2]}"
+          init4="${spec['ready'][3]}" init5="${spec['ready'][4]}" init6="${spec['ready'][5]}"
+          init7="${spec['ready'][6]}"
           sim_backend="${sim_backend}"
           control_gains="${control_gains}"
           can_interface="${can_interface}"
