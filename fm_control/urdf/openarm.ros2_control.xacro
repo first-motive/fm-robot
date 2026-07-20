@@ -38,6 +38,12 @@ arm prefix, e.g. openarm_right_.
         <!-- MujocoSystemInterface reads the MJCF from this URDF param.
              mujoco_model_path is set by the top-level xacro. -->
         <param name="mujoco_model">${mujoco_model_path}</param>
+        <!-- Headless: step physics with no GLFW window; the operator views the sim
+             through Foxglove / the desktop app, never MuJoCo's own window. Required on
+             macOS, where the plugin runs its GLFW loop off the main thread (Cocoa
+             forbids that and the launch hangs). On Linux the container's xvfb-run
+             wrapper then wraps a windowless process — a harmless no-op. -->
+        <param name="headless">true</param>
       </hardware>
     </xacro:if>
 
