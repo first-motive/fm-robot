@@ -44,6 +44,11 @@ Right_Wheel_Joint) are velocity-controlled in sim only.
       <hardware>
         <plugin>mujoco_ros2_control/MujocoSystemInterface</plugin>
         <param name="mujoco_model">${mujoco_model_path}</param>
+        <!-- Headless: step physics with no GLFW window; the operator views the sim
+             through Foxglove / the desktop app, never MuJoCo's own window. Required on
+             macOS (Cocoa forbids the plugin's off-main-thread GLFW loop); a harmless
+             no-op under the container's xvfb-run. -->
+        <param name="headless">true</param>
       </hardware>
     </xacro:if>
 

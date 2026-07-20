@@ -42,6 +42,11 @@ SO-ARM101 factory default). The real path is plumbed but untested — no hardwar
         <!-- MujocoSystemInterface reads the MJCF from this URDF param. The SO101
              MJCF joint names match this system's joints exactly. -->
         <param name="mujoco_model">${mujoco_model_path}</param>
+        <!-- Headless: step physics with no GLFW window; the operator views the sim
+             through Foxglove / the desktop app, never MuJoCo's own window. Required on
+             macOS (Cocoa forbids the plugin's off-main-thread GLFW loop); a harmless
+             no-op under the container's xvfb-run. -->
+        <param name="headless">true</param>
       </hardware>
     </xacro:if>
 

@@ -48,6 +48,11 @@ arm is on hand.
              MJCF joint names match this system's joints exactly. Both arm systems
              point at the same model; the plugin maps each system's joints by name. -->
         <param name="mujoco_model">${mujoco_model_path}</param>
+        <!-- Headless: step physics with no GLFW window; the operator views the sim
+             through Foxglove / the desktop app, never MuJoCo's own window. Required on
+             macOS (Cocoa forbids the plugin's off-main-thread GLFW loop); a harmless
+             no-op under the container's xvfb-run. -->
+        <param name="headless">true</param>
       </hardware>
     </xacro:if>
 
