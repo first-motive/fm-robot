@@ -122,43 +122,26 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+  # The smoke asserts the description view reached a working state, rather than that
+  # the process was still alive when a timer fired. run.sh is still the thing under
+  # test — it stays the launch command, so the front door keeps its coverage.
+  #
+  # With both viewers off, use_jsp_gui:=auto resolves to the headless
+  # joint_state_publisher, which seeds the home pose and publishes /joint_states.
+  # That topic assert is the one a silent stack cannot pass.
+  #
+  # No controller assert here: fm-robot owns the ros2_control xacros but ships no
+  # launch that spawns a controller_manager. Controllers reach `active` under
+  # fm_bringup, so that assert lives in fm-app and in fm-ros2's ci-smoke.sh.
   smoke:
     name: smoke run.sh (native headless)
-    runs-on: ubuntu-latest
-    container: ros:humble
-    defaults:
-      run:
-        shell: bash
-    steps:
-      - uses: actions/checkout@v7
-
-      - name: Install tooling + ROS deps
-        run: |
-          apt-get update && apt-get install -y python3-vcstool
-          source /opt/ros/humble/setup.bash
-          vcs import < fm-robot.repos
-          # Build only the ament packages; ignore the file-vendored externals.
-          for d in external/*/; do touch "${d}COLCON_IGNORE"; done
-          rm -f external/openarm_description/COLCON_IGNORE external/unitree_ros2/COLCON_IGNORE
-          [ -d external/unitree_ros2/example/src ] && \
-            touch external/unitree_ros2/example/src/COLCON_IGNORE || true
-          apt-get install -y \
-            ros-humble-rosidl-generator-dds-idl \
-            ros-humble-cyclonedds ros-humble-rmw-cyclonedds-cpp
-          rosdep update
-          rosdep install --from-paths . external --ignore-src -y -r
-
-      - name: Build workspace
-        run: |
-          source /opt/ros/humble/setup.bash
-          colcon build --symlink-install
-
-      - name: Launch headless, bounded
-        run: |
-          # Workspace pre-built above, so run.sh's incremental build is quick and the
-          # bounded window covers the launch itself. 124 = ran the full window (came
-          # up OK); 0 = clean exit. Anything else is a real failure.
-          set +e
-          timeout 90 ./run.sh --native --robot g1_d use_rviz:=false use_foxglove:=false
-          code=$?
-          [ "$code" -eq 124 ] || [ "$code" -eq 0 ] || [ "$code" -eq 143 ]
+    uses: first-motive/.github/.github/workflows/ros2-smoke.yml@main
+    with:
+      repos-file: fm-robot.repos
+      build-externals: openarm_description unitree_ros2
+      apt-packages: >-
+        ros-humble-rosidl-generator-dds-idl
+        ros-humble-cyclonedds ros-humble-rmw-cyclonedds-cpp
+      launch: ./run.sh --native --robot g1_d use_rviz:=false use_foxglove:=false
+      expect-nodes: /joint_state_publisher /robot_state_publisher
+      expect-topics: /joint_states
