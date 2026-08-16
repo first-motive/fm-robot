@@ -1,13 +1,15 @@
 #!/usr/bin/env bash
+# fm-render: d2-render sha256:2acf6888887bc63280e7fca7aa208520b31040421a6afe2a56e4df81797e49fc — rendered by the First Motive render plane — edit the upstream source, not this file
 # Render every d2 diagram in the repo to an SVG sidecar with the First Motive
-# font (Geist Mono). Diagram sources live next to the package they document
-# (<package>/doc/diagrams/) plus the repo-level docs/diagrams/; the shared
-# palette (styles.d2) and the font ship here, imported with a relative path.
+# font (Geist Mono). Sources live in docs/diagrams/ and next to the package they
+# document (<package>/doc/diagrams/); both are found, so a repo that grows a
+# package-level diagram needs no change here. The shared palette (styles.d2) and
+# the font ship in this directory and are imported by relative path.
 # Self-contained: the font ships in fonts/, so anyone with the repo can
 # re-render without installing fonts. Needs d2 on PATH (https://d2lang.com).
 set -euo pipefail
 
-HERE="$(cd "$(dirname "$0")" && pwd)"   # docs/diagrams
+HERE="$(cd "$(dirname "$0")" && pwd)"    # docs/diagrams
 ROOT="$(cd "$HERE/../.." && pwd)"        # repo root
 FONT="$HERE/fonts/GeistMono-VF.ttf"
 
