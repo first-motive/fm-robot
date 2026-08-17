@@ -17,3 +17,18 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       ros-humble-ros2-controllers \
       ros-humble-joint-trajectory-controller \
     && rm -rf /var/lib/apt/lists/*
+
+# The joint-state publishers view_robot.launch.py dispatches: headless
+# joint_state_publisher on the foxglove path, joint_state_publisher_gui on the rviz
+# path (use_jsp_gui defaults to auto and follows the viewer).
+#
+# fm_description already declares both as exec_depend, and every rosdep-driven path
+# — CI's colcon build, the native pixi env — installs them from that declaration.
+# This image does not run rosdep; it installs a hand-written list, so a declared
+# dependency reaches the container only if someone also adds it here. That gap made
+# `run.sh --container --viewer rviz` die on "package 'joint_state_publisher_gui' not
+# found", which fm-ros2's ci-smoke caught the first time it was allowed to run.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      ros-humble-joint-state-publisher \
+      ros-humble-joint-state-publisher-gui \
+    && rm -rf /var/lib/apt/lists/*
