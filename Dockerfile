@@ -32,3 +32,19 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       ros-humble-joint-state-publisher \
       ros-humble-joint-state-publisher-gui \
     && rm -rf /var/lib/apt/lists/*
+
+# Two more dependencies fm-robot's packages declare that the image never installed,
+# found by scripts/ci/check-image-deps.sh in fm-ros2 once it compared the two lists:
+#
+#   topic_based_ros2_control  fm_control's sim hardware interface — the ros2_control
+#                             plugin the mock and sim backends load
+#   python3-opencv            fm_sensors' camera_node imports cv2 at capture time
+#                             (deferred so unit tests import without it, which is why
+#                             the build never noticed)
+#
+# Same root cause as the joint-state publishers: declared in package.xml, absent from
+# the hand-written apt list, and nothing compared them.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      ros-humble-topic-based-ros2-control \
+      python3-opencv \
+    && rm -rf /var/lib/apt/lists/*
