@@ -114,16 +114,17 @@ Each emits its `<ros2_control>` system with joint names matching the geometry ex
 and (for gazebo) the `<gazebo>` world plugin that hosts the controller_manager inside
 the sim. SO101, G1-D, and Axol merge a vendored flat URDF from `fm_description`'s
 share; OpenArm parses its preset-driven `openarm_description` xacro. The robot name
-matches each MoveIt SRDF so Servo accepts the pair. Axol is bimanual: its xacro
-emits two `<ros2_control>` systems (`axol_left_system` + `axol_right_system`), 14
-joints total.
+matches each MoveIt SRDF so Servo accepts the pair. Axol is bimanual, 14 joints
+total.
 
-OpenArm emits one system per arm (`openarm_left_system` + `openarm_right_system`)
-on `mock`, `isaac` and `real`, but a single `openarm_system` holding both arms on
-`mujoco` and `gazebo`. Each `MujocoSystemInterface` loads its own copy of the MJCF,
-so per-arm systems would step the arms in separate worlds, and gz_ros2_control
-never finishes initialising two `GazeboSimSystem` systems. Real hardware keeps
-per-arm systems because each one drives its own CAN arm.
+The bimanual robots emit one system per arm on `mock` and `isaac`
+(`openarm_left_system` + `openarm_right_system`, `axol_left_system` +
+`axol_right_system`), and OpenArm also on `real`. On `mujoco` and `gazebo` both
+arms share one system (`openarm_system`, `axol_system`). Each
+`MujocoSystemInterface` loads its own copy of the MJCF, so per-arm systems would
+step the arms in separate worlds, and gz_ros2_control never finishes initialising
+two `GazeboSimSystem` systems. OpenArm's real hardware keeps per-arm systems
+because each one drives its own CAN arm; Axol has no real backend yet.
 
 Consumed by `fm_bringup`'s `sim.launch.py`, `servo.launch.py`, and `teleop.launch.py`.
 
