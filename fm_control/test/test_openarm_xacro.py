@@ -64,6 +64,71 @@ def test_sim_backend_selects_plugin(backend, plugin):
     assert CAMERA_LINKS <= _links(robot)
 
 
+def _systems(robot):
+    return {
+        system.get('name'): [joint.get('name') for joint in system.findall('joint')]
+        for system in robot.findall('ros2_control')
+    }
+
+
+@pytest.mark.parametrize('backend', ['mujoco', 'gz', 'gazebo'])
+def test_simulators_load_one_system_for_both_arms(backend):
+    # One MujocoSystemInterface is one MJCF world, and gz_ros2_control does not
+    # initialise two GazeboSimSystem systems; both get every arm in one.
+    systems = _systems(_process(robot_preset='default_bimanual', sim_backend=backend))
+    assert list(systems) == ['openarm_system']
+    joints = systems['openarm_system']
+    assert len(joints) == len(set(joints)) == 16
+    for side in ('left', 'right'):
+        assert {f'openarm_{side}_joint{i}' for i in range(1, 8)} <= set(joints)
+        assert f'openarm_{side}_finger_joint1' in joints
+
+
+@pytest.mark.parametrize('backend', ['mock', 'isaac', 'real'])
+def test_other_backends_keep_one_system_per_arm(backend):
+    systems = _systems(_process(robot_preset='default_bimanual', sim_backend=backend))
+    assert sorted(systems) == ['openarm_left_system', 'openarm_right_system']
+    assert all(len(joints) == 8 for joints in systems.values())
+
+
+def _initial_values(robot):
+    return {
+        joint.get('name'): {
+            state.get('name'): float(state.find("param[@name='initial_value']").text)
+            for state in joint.findall('state_interface')
+        }
+        for joint in robot.findall('ros2_control/joint')
+    }
+
+
+@pytest.mark.parametrize('backend', ['mujoco', 'gazebo'])
+@pytest.mark.parametrize('preset', ['default_bimanual', 'right_arm'])
+def test_single_system_spawns_the_per_arm_pose(backend, preset):
+    # Same joints, same mirrored ready pose, whichever layout emits them.
+    single = _initial_values(_process(robot_preset=preset, sim_backend=backend))
+    assert single == _initial_values(_process(robot_preset=preset, sim_backend='mock'))
+
+
+def test_left_arm_spawns_mirrored():
+    # joint4 is excluded from the reflect; every other arm joint is sign-flipped.
+    values = _initial_values(_process(robot_preset='default_bimanual', sim_backend='mujoco'))
+
+    def position(side, joint):
+        return values[f'openarm_{side}_joint{joint}']['position']
+
+    assert position('left', 4) == position('right', 4)
+    for joint in (1, 2, 3, 5, 6, 7):
+        assert position('left', joint) == -position('right', joint), f'joint{joint}'
+
+
+def test_real_hardware_names_each_arm():
+    robot = _process(robot_preset='default_bimanual', sim_backend='real')
+    prefixes = {
+        p.text for p in robot.findall("ros2_control/hardware/param[@name='arm_prefix']")
+    }
+    assert prefixes == {'openarm_left_', 'openarm_right_'}
+
+
 def test_default_backend_is_mock():
     assert _plugins(_process()) == {PLUGIN_BY_BACKEND['mock']}
 

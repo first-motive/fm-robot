@@ -118,6 +118,13 @@ matches each MoveIt SRDF so Servo accepts the pair. Axol is bimanual: its xacro
 emits two `<ros2_control>` systems (`axol_left_system` + `axol_right_system`), 14
 joints total.
 
+OpenArm emits one system per arm (`openarm_left_system` + `openarm_right_system`)
+on `mock`, `isaac` and `real`, but a single `openarm_system` holding both arms on
+`mujoco` and `gazebo`. Each `MujocoSystemInterface` loads its own copy of the MJCF,
+so per-arm systems would step the arms in separate worlds, and gz_ros2_control
+never finishes initialising two `GazeboSimSystem` systems. Real hardware keeps
+per-arm systems because each one drives its own CAN arm.
+
 Consumed by `fm_bringup`'s `sim.launch.py`, `servo.launch.py`, and `teleop.launch.py`.
 
 ## G1-D Real Arm: a Bridge, Not a ros2_control Plugin
