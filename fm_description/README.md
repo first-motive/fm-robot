@@ -28,6 +28,7 @@ the URDF. A viz client (RViz or Foxglove) subscribes these topics.
 
 ```
 urdf/     fm_robot.urdf.xacro   (placeholder — replace with the real robot)
+          openarm_cameras.xacro (OpenArm camera frames, see below)
 meshes/   visual + collision geometry
 launch/   description-only launch helpers
 ```
@@ -247,6 +248,25 @@ exceeds the default; over the limit the bridge silently drops that asset and
 resets the asset channel, so neighbouring meshes fail to load too. The default
 `right_arm` preset stays well under 10 MB, but the raised limit lets every preset
 render.
+
+### OpenArm: Camera Frames
+
+`urdf/openarm_cameras.xacro` holds the OpenArm camera optical frames (ROS optical
+convention: z forward, x right, y down). `fm_control`'s OpenArm xacro includes it;
+the poses and their calibration history came from fm-skills, renamed to `openarm_*`.
+
+| Link | Parent | Emitted when |
+|------|--------|--------------|
+| `openarm_cam_chest_optical` | `openarm_body_link0` | the preset enables the body |
+| `openarm_right_cam_wrist_mount` | `openarm_right_link7` (or `openarm_right_ee_base_link` when link7 is collapsed into it) | the preset has a right arm |
+| `openarm_right_cam_wrist_optical` | `openarm_right_cam_wrist_mount` | the preset has a right arm |
+
+Each joint is the link name plus `_joint`. The wrist mount is the hand frame the
+wrist pose was measured against: it sits 100.1 mm out from link7 along the wrist,
+flipped about x.
+
+The `view_robot` OpenArm entry still processes the upstream `openarm_description`
+xacro, so it does not show these frames.
 
 ### Adding a Robot
 

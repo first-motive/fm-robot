@@ -43,14 +43,26 @@ jobs:
   # The colcon block lives in first-motive/.github. openarm_description (xacro) and
   # the unitree_ros2 message packages are the two externals genuinely built here;
   # everything else the manifest imports is file-vendored or reference-only.
+  # Humble is the fleet's target; Jazzy is where the simulation stack runs. Jazzy
+  # builds only for now (`test` is the reusable workflow's boolean input), so the
+  # OpenArm xacro test runs on Humble alone: Jazzy's ament_flake8 adds
+  # flake8-quotes, and fm_description's Python still uses double quotes, so its
+  # lint tests would fail the lane until that code is converted.
   build-test:
+    strategy:
+      fail-fast: false
+      matrix:
+        distro: [humble, jazzy]
     uses: first-motive/.github/.github/workflows/ros2-build-test.yml@main
     with:
+      distro: ${{ matrix.distro }}
+      test: ${{ matrix.distro == 'humble' }}
       checkout-path: src/fm-robot
       repos-file: fm-robot.repos
       build-externals: openarm_description unitree_ros2
       apt-packages: >-
-        ros-humble-rosidl-generator-dds-idl ros-humble-cyclonedds ros-humble-rmw-cyclonedds-cpp
+        ros-${{ matrix.distro }}-rosidl-generator-dds-idl ros-${{ matrix.distro }}-cyclonedds
+        ros-${{ matrix.distro }}-rmw-cyclonedds-cpp
 
   image:
     name: build + publish image (FROM fm-docker base)

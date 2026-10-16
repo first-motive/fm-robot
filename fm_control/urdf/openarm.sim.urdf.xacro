@@ -10,7 +10,8 @@ arms the preset enables, so single-arm presets (right_arm) and bimanual presets
 
 Args:
   robot_preset   openarm_description v2.0 preset (right_arm, default_bimanual, ...)
-  sim_backend    mock | mujoco | gazebo | isaac | real  (selects the System plugin)
+  sim_backend    mock | mujoco | gz | gazebo | isaac | real  (selects the System
+                 plugin; gz is an alias for gazebo, anything else fails the xacro)
   can_interface  SocketCAN device for the real backend (ignored by sim backends)
   can_fd         CAN-FD toggle for the real backend
 -->
@@ -19,6 +20,15 @@ Args:
 
   <xacro:arg name="robot_preset" default="right_arm"/>
   <xacro:arg name="sim_backend" default="mock"/>
+  <!-- gz is the simulation stack's name for Gazebo; the macros below say gazebo. -->
+  <xacro:property name="requested_backend" value="$(arg sim_backend)"/>
+  <xacro:property name="backend" value="${'gazebo' if requested_backend == 'gz' else requested_backend}"/>
+  <!-- An unknown value would otherwise emit a system with no <hardware>, which only
+       fails later inside controller_manager. -->
+  <xacro:if value="${backend not in ['mock', 'mujoco', 'gazebo', 'isaac', 'real']}">
+    ${xacro.fatal('unknown sim_backend: ' + str(requested_backend)
+                  + ' (expected mock, mujoco, gz, gazebo, isaac or real)')}
+  </xacro:if>
   <xacro:arg name="collapse_internal_empty_links" default="true"/>
   <xacro:arg name="emit_grasp_frame" default="false"/>
   <xacro:arg name="can_interface" default="can0"/>
@@ -37,6 +47,7 @@ Args:
   <!-- Geometry from openarm_description, plus First Motive's ros2_control macros. -->
   <xacro:include filename="$(find openarm_description)/assets/robot/openarm_v2.0/urdf/utils/openarm_v20_robot.xacro"/>
   <xacro:include filename="$(find fm_control)/urdf/openarm.ros2_control.xacro"/>
+  <xacro:include filename="$(find fm_description)/urdf/openarm_cameras.xacro"/>
 
   <xacro:property name="robot_root" value="$(find openarm_description)/assets/robot/openarm_v2.0"/>
   <xacro:property name="config_root" value="${robot_root + '/config'}"/>
@@ -88,16 +99,24 @@ Args:
   <xacro:openarm_emit_arm_systems
       arm_specs="${arm_specs}"
       index="0"
-      sim_backend="$(arg sim_backend)"
+      sim_backend="${backend}"
       control_gains="${control_gains}"
       can_interface="$(arg can_interface)"
       can_fd="$(arg can_fd)"
       isaac_joint_commands_topic="$(arg isaac_joint_commands_topic)"
       isaac_joint_states_topic="$(arg isaac_joint_states_topic)"/>
 
+  <!-- Camera frames on whichever links this preset carries. -->
+  <xacro:property name="right_arms" value="${[s for s in arm_specs if s['prefix'] == 'openarm_right_']}"/>
+  <xacro:openarm_cameras
+      body="${'body' in components and preset_cfg['body']['enabled']}"
+      right_arm="${len(right_arms) > 0}"
+      right_hand="${len(right_arms) > 0 and right_arms[0]['hand']}"
+      collapse_empty_links="$(arg collapse_internal_empty_links)"/>
+
   <!-- Gazebo hosts the controller_manager inside the sim via this world plugin,
        which loads the controllers.yaml. Emitted only for the gazebo backend. -->
-  <xacro:if value="${'$(arg sim_backend)' == 'gazebo'}">
+  <xacro:if value="${backend == 'gazebo'}">
     <gazebo>
       <plugin filename="gz_ros2_control-system"
               name="gz_ros2_control::GazeboSimROS2ControlPlugin">
