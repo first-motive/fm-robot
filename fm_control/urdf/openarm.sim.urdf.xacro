@@ -20,15 +20,11 @@ Args:
 
   <xacro:arg name="robot_preset" default="right_arm"/>
   <xacro:arg name="sim_backend" default="mock"/>
-  <!-- gz is the simulation stack's name for Gazebo; the macros below say gazebo. -->
-  <xacro:property name="requested_backend" value="$(arg sim_backend)"/>
-  <xacro:property name="backend" value="${'gazebo' if requested_backend == 'gz' else requested_backend}"/>
-  <!-- An unknown value would otherwise emit a system with no <hardware>, which only
-       fails later inside controller_manager. -->
-  <xacro:if value="${backend not in ['mock', 'mujoco', 'gazebo', 'isaac', 'real']}">
-    ${xacro.fatal('unknown sim_backend: ' + str(requested_backend)
-                  + ' (expected mock, mujoco, gz, gazebo, isaac or real)')}
-  </xacro:if>
+  <!-- Sets `backend`: gz becomes gazebo, and an unknown value fails the xacro. -->
+  <xacro:include filename="$(find fm_control)/urdf/sim_backend.xacro"/>
+  <xacro:fm_sim_backend
+      requested="$(arg sim_backend)"
+      supported="${['mock', 'mujoco', 'gazebo', 'isaac', 'real']}"/>
   <xacro:arg name="collapse_internal_empty_links" default="true"/>
   <xacro:arg name="emit_grasp_frame" default="false"/>
   <xacro:arg name="can_interface" default="can0"/>

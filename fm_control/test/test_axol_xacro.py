@@ -53,7 +53,7 @@ def _initial_values(robot):
     }
 
 
-@pytest.mark.parametrize('backend', ['mujoco', 'gazebo'])
+@pytest.mark.parametrize('backend', ['mujoco', 'gz', 'gazebo'])
 def test_simulators_load_one_system_for_both_arms(backend):
     # One MujocoSystemInterface is one MJCF world, and gz_ros2_control does not
     # initialise two GazeboSimSystem systems; both get every arm in one.
@@ -77,3 +77,19 @@ def test_single_system_spawns_the_per_arm_pose(backend):
     assert single == _initial_values(_process(sim_backend='mock'))
     assert single['left_e1_0']['position'] == 1.0
     assert single['right_e1_0']['position'] == -1.0
+
+
+@pytest.mark.parametrize('backend', ['gz', 'gazebo'])
+def test_gazebo_hosts_controller_manager(backend):
+    robot = _process(sim_backend=backend)
+    assert {p.text for p in robot.findall('ros2_control/hardware/plugin')} == {
+        'gz_ros2_control/GazeboSimSystem'
+    }
+    assert robot.find('gazebo/plugin').get('filename') == 'gz_ros2_control-system'
+
+
+@pytest.mark.parametrize('backend', ['gazeb', 'real'])
+def test_unknown_backend_fails(backend):
+    # Axol has no real hardware plugin yet, so real is as unknown as a typo.
+    with pytest.raises(xacro.XacroException, match=f'unknown sim_backend: {backend}'):
+        _process(sim_backend=backend)

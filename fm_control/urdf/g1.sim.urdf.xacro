@@ -15,7 +15,8 @@ arm out-of-band (see g1.ros2_control.xacro). The description stays geometry-only
 robot_state_publisher still serves TF + visuals.
 
 Args:
-  sim_backend   mock | mujoco | gazebo | isaac | real
+  sim_backend   mock | mujoco | gz | gazebo | isaac | real  (gz is an alias for
+                gazebo, anything else fails the xacro)
   mujoco_model  MJCF the mujoco backend loads; injected by the fm_bringup registry
                 from fm_sim_models when sim_backend=mujoco (empty default otherwise).
                 The registered g1_29dof model is wired, not yet validated — its legs
@@ -24,6 +25,11 @@ Args:
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="G1_D">
 
   <xacro:arg name="sim_backend" default="mock"/>
+  <!-- Sets `backend`: gz becomes gazebo, and an unknown value fails the xacro. -->
+  <xacro:include filename="$(find fm_control)/urdf/sim_backend.xacro"/>
+  <xacro:fm_sim_backend
+      requested="$(arg sim_backend)"
+      supported="${['mock', 'mujoco', 'gazebo', 'isaac', 'real']}"/>
   <xacro:arg name="isaac_joint_commands_topic" default="/isaac_joint_commands"/>
   <xacro:arg name="isaac_joint_states_topic" default="/isaac_joint_states"/>
   <!-- MJCF path owned by fm_sim_models, injected by the fm_bringup registry when
@@ -40,14 +46,14 @@ Args:
   <xacro:include filename="$(find fm_control)/urdf/g1.ros2_control.xacro"/>
 
   <xacro:g1_system
-      sim_backend="$(arg sim_backend)"
+      sim_backend="${backend}"
       mujoco_model_path="${mujoco_model_path}"
       isaac_joint_commands_topic="$(arg isaac_joint_commands_topic)"
       isaac_joint_states_topic="$(arg isaac_joint_states_topic)"/>
 
   <!-- Gazebo hosts the controller_manager inside the sim via this world plugin,
        which loads the controllers.yaml. Emitted only for the gazebo backend. -->
-  <xacro:if value="${'$(arg sim_backend)' == 'gazebo'}">
+  <xacro:if value="${backend == 'gazebo'}">
     <gazebo>
       <plugin filename="gz_ros2_control-system"
               name="gz_ros2_control::GazeboSimROS2ControlPlugin">

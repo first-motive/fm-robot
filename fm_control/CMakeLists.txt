@@ -97,7 +97,7 @@ if(BUILD_TESTING)
     ${CMAKE_CURRENT_SOURCE_DIR}/include)
   ament_target_dependencies(test_g1_hand_sdk_bridge unitree_hg)
 
-  # Processes the installed OpenArm xacro for every hardware value.
+  # Process each installed robot xacro for every sim_backend value.
   find_package(ament_cmake_pytest REQUIRED)
   ament_add_pytest_test(test_openarm_xacro test/test_openarm_xacro.py
     TIMEOUT 120)
@@ -105,6 +105,10 @@ if(BUILD_TESTING)
     TIMEOUT 120)
   # Checks the sim Servo SRDF and params against the generated URDF and moveit_servo.
   ament_add_pytest_test(test_openarm_sim_servo test/test_openarm_sim_servo.py
+    TIMEOUT 120)
+  ament_add_pytest_test(test_so101_xacro test/test_so101_xacro.py
+    TIMEOUT 120)
+  ament_add_pytest_test(test_g1_xacro test/test_g1_xacro.py
     TIMEOUT 120)
 endif()
 
