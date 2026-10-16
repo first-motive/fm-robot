@@ -48,20 +48,28 @@ target_include_directories(g1_hand_sdk_bridge PUBLIC
 target_compile_features(g1_hand_sdk_bridge PUBLIC cxx_std_17)
 ament_target_dependencies(g1_hand_sdk_bridge rclcpp trajectory_msgs unitree_hg)
 
+install(TARGETS control_node g1_arm_sdk_bridge g1_base_teleop g1_hand_sdk_bridge
+  DESTINATION lib/${PROJECT_NAME})
+
 # Vision 1:1 mirroring: hosts moveit_servo::PoseTracking, servoing the EE to an absolute
 # /target_pose and holding. Replaces servo_node on the mirror teleop path.
-add_executable(pose_tracking_node src/pose_tracking_node.cpp)
-target_compile_features(pose_tracking_node PUBLIC cxx_std_17)
-ament_target_dependencies(pose_tracking_node
-  rclcpp
-  geometry_msgs
-  moveit_servo
-  moveit_ros_planning
-  moveit_core
-  Eigen3)
-
-install(TARGETS control_node g1_arm_sdk_bridge g1_base_teleop g1_hand_sdk_bridge pose_tracking_node
-  DESTINATION lib/${PROJECT_NAME})
+# PoseTracking exists only in Humble's moveit_servo; Jazzy's rewrite removed it, so the
+# node is skipped there until it is ported to moveit_servo::Servo.
+if("$ENV{ROS_DISTRO}" STREQUAL "humble")
+  add_executable(pose_tracking_node src/pose_tracking_node.cpp)
+  target_compile_features(pose_tracking_node PUBLIC cxx_std_17)
+  ament_target_dependencies(pose_tracking_node
+    rclcpp
+    geometry_msgs
+    moveit_servo
+    moveit_ros_planning
+    moveit_core
+    Eigen3)
+  install(TARGETS pose_tracking_node DESTINATION lib/${PROJECT_NAME})
+else()
+  message(STATUS "fm_control: skipping pose_tracking_node on $ENV{ROS_DISTRO} "
+    "(moveit_servo PoseTracking is Humble-only)")
+endif()
 install(DIRECTORY include/ DESTINATION include)
 
 # Backend-selectable ros2_control xacro consumed by the sim/teleop launches.
@@ -86,6 +94,11 @@ if(BUILD_TESTING)
   target_include_directories(test_g1_hand_sdk_bridge PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/include)
   ament_target_dependencies(test_g1_hand_sdk_bridge unitree_hg)
+
+  # Processes the installed OpenArm xacro for every hardware value.
+  find_package(ament_cmake_pytest REQUIRED)
+  ament_add_pytest_test(test_openarm_xacro test/test_openarm_xacro.py
+    TIMEOUT 120)
 endif()
 
 ament_package()

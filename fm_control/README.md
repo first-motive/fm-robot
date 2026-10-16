@@ -42,8 +42,10 @@ src/
   control_node.cpp        placeholder node (unused by the backends below)
   g1_arm_sdk_bridge.cpp   G1-D real arm: Servo JointTrajectory -> unitree_hg/LowCmd
   g1_base_teleop.cpp      G1-D base: Twist -> Unitree AGV Move RPC
+  pose_tracking_node.cpp  vision mirror: MoveIt Servo PoseTracking host (Humble only;
+                          Jazzy's moveit_servo dropped PoseTracking, so it is not built)
 include/fm_control/       pure command-building logic for the two bridge nodes
-test/                     gtest for the bridge logic
+test/                     gtest for the bridge logic; pytest for the OpenArm xacro
 ```
 
 ## Backend → System Plugin
@@ -66,6 +68,32 @@ sim_backend   openarm                     so101                            g1_d 
 
 The sim backends are identical across robots: only the geometry + joint set differ.
 The `real` backend is where the robots diverge — see the G1-D asymmetry below.
+
+### OpenArm Arguments
+
+The OpenArm xacro's `sim_backend` also accepts `gz`, the simulation stack's name for
+Gazebo; `gz` and `gazebo` select the same plugin. Any other value fails the xacro
+run rather than emitting a system with no `<hardware>`.
+
+| `sim_backend` | System plugin | Notes |
+|---------------|---------------|-------|
+| `mock` (default) | `mock_components/GenericSystem` | perfect state echo |
+| `mujoco` | `mujoco_ros2_control/MujocoSystemInterface` | MJCF from `mujoco_model:=` |
+| `gz` or `gazebo` | `gz_ros2_control/GazeboSimSystem` | adds the `<gazebo>` plugin, controllers from `gazebo_controllers_file:=` |
+| `isaac` | `topic_based_ros2_control/TopicBasedSystem` | `/isaac_joint_commands`, `/isaac_joint_states` |
+| `real` | `openarm_hardware/OpenArmHW` | SocketCAN `can_interface:=`, `can_fd:=` |
+
+```bash
+xacro $(ros2 pkg prefix fm_control)/share/fm_control/urdf/openarm.sim.urdf.xacro \
+  robot_preset:=default_bimanual sim_backend:=gz emit_grasp_frame:=true
+```
+
+`emit_grasp_frame` defaults to `false`. Pass `emit_grasp_frame:=true` for the
+fm-skills `fm_openarm_v2` robot profile, whose `ee_frame` is the pinch gripper's
+`openarm_*_grasp_frame`; without it that frame does not exist.
+
+The OpenArm description also carries the chest and right wrist camera frames from
+`fm_description/urdf/openarm_cameras.xacro`, on whichever links the preset enables.
 
 ## How It Is Built
 

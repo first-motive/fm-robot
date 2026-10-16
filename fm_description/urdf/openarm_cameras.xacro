@@ -1,0 +1,76 @@
+<?xml version="1.0"?>
+<!--
+OpenArm camera optical frames (ROS optical convention: z forward, x right, y down),
+each a fixed transform from a robot link. Moved from fm-skills
+openarm_v2_skills_config (urdf/cameras.xacro + config/cameras.yaml), where the frames
+were written against Anvil's follower_* description. The poses are unchanged; only the
+names and parents move to the openarm_* convention.
+
+  fm-skills (follower_*)          here (openarm_*)
+  cam_chest_optical          ->   openarm_cam_chest_optical
+  cam_wrist_r_optical        ->   openarm_right_cam_wrist_optical
+  parent follower_body_link0 ->   openarm_body_link0  (same frame)
+  parent follower_r_hand     ->   openarm_right_cam_wrist_mount  (same frame)
+
+Args:
+  body                  the preset enables the body (the chest camera's parent)
+  right_arm             the preset enables the right arm (the wrist camera's)
+  right_hand            the right arm carries a gripper
+  collapse_empty_links  collapse_internal_empty_links was passed to openarm_description
+-->
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <xacro:macro name="openarm_cameras" params="body right_arm right_hand collapse_empty_links">
+
+    <!-- Chest camera (UVC fisheye). First calibrated on fm-rob-01 on 2026-10-01 by the
+         classical baseline's calibrate_chest: an ArUco marker on the right wrist bracket
+         over 15 poses, median reprojection 0.80 px. Refined on 2026-10-13 by
+         tools/fit_chest_extrinsic.py from 299 chest frames of 97 recorded grasps (can
+         centroid against the FK TCP at the close): 12 mm back, 25 mm lower, 1.3 deg about
+         the optical x axis. Fitted without 14 held-out episodes, the can position error on
+         their 44 frames fell from 27.9 to 11.4 mm median (p90 38.2 to 19.6 mm); this pose
+         is the fit on all of them. About 9 cm forward and 56 cm up on the centre line,
+         looking forward and 51 deg down. Re-fit if the camera or its mount is touched.
+         Anvil's CAD URDF places it at xyz 0.0888 0 0.6231, rpy -2.4051 0 -1.5708, which
+         projects the TCP 95-147 px away from the first calibration; the calibration
+         matched the fingers in recorded frames, so it stands. -->
+    <xacro:if value="${body}">
+      <link name="openarm_cam_chest_optical"/>
+      <joint name="openarm_cam_chest_optical_joint" type="fixed">
+        <parent link="openarm_body_link0"/>
+        <child link="openarm_cam_chest_optical"/>
+        <origin xyz="0.087781 -0.008784 0.555218" rpy="-2.466778 -0.007809 -1.579296"/>
+      </joint>
+    </xacro:if>
+
+    <xacro:if value="${right_arm}">
+      <!-- With a gripper and collapsed empty links, openarm_description folds link7
+           into ee_base_link, which keeps link7's frame. -->
+      <xacro:property name="right_wrist_parent"
+          value="${'openarm_right_ee_base_link' if right_hand and collapse_empty_links else 'openarm_right_link7'}"/>
+      <!-- Anvil's follower_r_hand frame, which the wrist pose was measured against.
+           Anvil and openarm_description share every joint axis and link7 frame, but
+           Anvil's hand sits 100.1 mm out along the wrist and flipped about x. -->
+      <link name="openarm_right_cam_wrist_mount"/>
+      <joint name="openarm_right_cam_wrist_mount_joint" type="fixed">
+        <parent link="${right_wrist_parent}"/>
+        <child link="openarm_right_cam_wrist_mount"/>
+        <origin xyz="0 0 -0.1001" rpy="${pi} 0 0"/>
+      </joint>
+
+      <!-- Right wrist camera. From Anvil's CAD URDF (right_wrist_cam_joint on
+           right_hand). On recorded wrist frames, with the chest camera's intrinsics
+           standing in, it puts the TCP centred between the fingertips; Enactic's
+           openarm_mujoco v2 camera put it about 100 px off-centre. Recheck once the
+           wrist camera has its own intrinsics. -->
+      <link name="openarm_right_cam_wrist_optical"/>
+      <joint name="openarm_right_cam_wrist_optical_joint" type="fixed">
+        <parent link="openarm_right_cam_wrist_mount"/>
+        <child link="openarm_right_cam_wrist_optical"/>
+        <origin xyz="0.074 0.001 0.009" rpy="-0.8255 0.0 1.5708"/>
+      </joint>
+    </xacro:if>
+
+  </xacro:macro>
+
+</robot>
