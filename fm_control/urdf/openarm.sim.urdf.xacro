@@ -73,7 +73,8 @@ Args:
   <!-- mirror_sign is the preset's sagittal reflect on Y (+1 for a base arm, -1 for the
        mirrored arm). The left arm is the right reflected about the XZ plane, so equal joint
        angles would tilt both arms the SAME world direction; the reflected joints must be
-       sign-flipped by mirror_sign to spawn as a true mirror. Applied in openarm_arm_system.
+       sign-flipped by mirror_sign to spawn as a true mirror. Applied in arm_specs below;
+       consumed by openarm_arm_joints.
        `ready` is the RIGHT-arm spawn joint vector: for a bimanual preset (2+ arms) a
        "hands forward, ~20cm apart" pre-grasp pose so the 1:1 mirror's engage baseline matches
        a natural two-hand start; for a single arm the original splayed bent-ready pose. -->
@@ -92,19 +93,29 @@ Args:
                                and preset_cfg[m]['connection']['attach_to'] == n]) > 0)
                 for n in arm_names]}"/>
 
+  <xacro:property name="single_system_backends" value="${['mujoco', 'gazebo']}"/>
+
   <!-- Control gains feed the real backend only; loaded once and passed through. -->
   <xacro:property name="control_gains"
       value="${xacro.load_yaml(config_root + '/arm/control/control_gains.yaml')}"/>
 
-  <xacro:openarm_emit_arm_systems
-      arm_specs="${arm_specs}"
-      index="0"
-      sim_backend="${backend}"
-      control_gains="${control_gains}"
-      can_interface="$(arg can_interface)"
-      can_fd="$(arg can_fd)"
-      isaac_joint_commands_topic="$(arg isaac_joint_commands_topic)"
-      isaac_joint_states_topic="$(arg isaac_joint_states_topic)"/>
+  <!-- The simulators share one system across both arms: MuJoCo loads one MJCF world
+       per system, and gz_ros2_control never initialises its hardware with two. Every
+       other backend, real hardware included, keeps one system per arm. -->
+  <xacro:if value="${backend in single_system_backends}">
+    <xacro:openarm_single_system arm_specs="${arm_specs}" sim_backend="${backend}"/>
+  </xacro:if>
+  <xacro:unless value="${backend in single_system_backends}">
+    <xacro:openarm_emit_arm_systems
+        arm_specs="${arm_specs}"
+        index="0"
+        sim_backend="${backend}"
+        control_gains="${control_gains}"
+        can_interface="$(arg can_interface)"
+        can_fd="$(arg can_fd)"
+        isaac_joint_commands_topic="$(arg isaac_joint_commands_topic)"
+        isaac_joint_states_topic="$(arg isaac_joint_states_topic)"/>
+  </xacro:unless>
 
   <!-- Camera frames on whichever links this preset carries. -->
   <xacro:property name="right_arms" value="${[s for s in arm_specs if s['prefix'] == 'openarm_right_']}"/>
