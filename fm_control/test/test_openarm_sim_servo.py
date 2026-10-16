@@ -116,6 +116,9 @@ def test_servo_targets_right_arm(servo_params):
     assert len(servo_params['joint_limit_margins']) == len(RIGHT_ARM_JOINTS)
 
 
+@pytest.mark.skipif(
+    os.environ.get('ROS_DISTRO') != 'jazzy',
+    reason='servo_sim.yaml targets the Jazzy moveit_servo, whose parameter file Humble lacks')
 def test_every_servo_key_is_declared_by_moveit_servo(servo_params):
     # The generate_parameter_library definition moveit_servo installs; a key it does
     # not declare would be silently ignored by Servo.
