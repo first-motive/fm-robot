@@ -74,6 +74,8 @@ install(DIRECTORY include/ DESTINATION include)
 
 # Backend-selectable ros2_control xacro consumed by the sim/teleop launches.
 install(DIRECTORY urdf DESTINATION share/${PROJECT_NAME})
+# Sim-only MoveIt Servo for the OpenArm on Jazzy: SRDF, kinematics, params, launch.
+install(DIRECTORY config launch DESTINATION share/${PROJECT_NAME})
 
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
@@ -100,6 +102,9 @@ if(BUILD_TESTING)
   ament_add_pytest_test(test_openarm_xacro test/test_openarm_xacro.py
     TIMEOUT 120)
   ament_add_pytest_test(test_axol_xacro test/test_axol_xacro.py
+    TIMEOUT 120)
+  # Checks the sim Servo SRDF and params against the generated URDF and moveit_servo.
+  ament_add_pytest_test(test_openarm_sim_servo test/test_openarm_sim_servo.py
     TIMEOUT 120)
 endif()
 

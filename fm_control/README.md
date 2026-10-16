@@ -1,7 +1,8 @@
 # fm_control
 
 The backend-selectable `ros2_control` descriptions for the OpenArm, SO101, G1-D,
-and Axol, plus the G1-D teleop bridge nodes. C++ (`ament_cmake`, C++17).
+and Axol, the G1-D teleop bridge nodes, and a sim-only Jazzy MoveIt Servo launch
+for the OpenArm. C++ (`ament_cmake`, C++17).
 
 ## Role
 
@@ -45,7 +46,11 @@ src/
   pose_tracking_node.cpp  vision mirror: MoveIt Servo PoseTracking host (Humble only;
                           Jazzy's moveit_servo dropped PoseTracking, so it is not built)
 include/fm_control/       pure command-building logic for the two bridge nodes
+config/openarm/           OpenArm SRDF, KDL kinematics and sim Servo parameters
+launch/
+  openarm_sim_servo.launch.py  OpenArm right-arm MoveIt Servo (Jazzy, sim only)
 test/                     gtest for the bridge logic; pytest for the OpenArm xacro
+                          and the OpenArm sim Servo config and launch
 ```
 
 ## Backend → System Plugin
@@ -146,6 +151,61 @@ g1_base_teleop      /cmd_vel (Twist) -> unitree_api/Request (AGV Move, api_id 10
 Both mirror the `unitree_sdk2` G1 examples. Reaching real hardware needs the Unitree
 CycloneDDS RMW (so `rt/...` maps to the robot's DDS topics). They are plumbed,
 build-checked, and unit-tested, but **untested on hardware** — none on hand yet.
+
+## OpenArm MoveIt Servo (Jazzy, Sim Only)
+
+`launch/openarm_sim_servo.launch.py` starts `/servo_node` for a simulated OpenArm
+right arm, so JointJog on `/servo_node/delta_joint_cmds` (the fm-teleop `arm_joint`
+channel) or TwistStamped on `/servo_node/delta_twist_cmds` drives the arm through
+`/openarm_right_arm_controller/joint_trajectory`.
+
+**Sim only.** Collision checking is off and `config/openarm/openarm.srdf` has no
+collision matrix; the launch logs a warning saying so. Never run it against a real
+arm. A real-arm Servo needs its own reviewed profile: a collision matrix with
+collision checking on, and DDS domain isolation.
+
+```bash
+ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST \
+  ros2 launch fm_control openarm_sim_servo.launch.py sim_only:=true command_type:=joint_jog
+```
+
+| Argument | Values | Effect |
+|----------|--------|--------|
+| `sim_only` | must be `true` (default `false`) | refuses to start otherwise |
+| `command_type` | `joint_jog` (default), `twist` | calls `~/switch_command_type`; the launch shuts down if Servo rejects it |
+| `robot_description` | URDF string, default empty | empty builds the URDF locally; a passed one must contain `openarm_body_link0` and `openarm_right_grasp_frame` |
+
+Servo always runs on sim time (`use_sim_time: true`). The local URDF is
+`default_bimanual` with `emit_grasp_frame:=true`, the model the SRDF names. Its
+`right_arm` group is a chain from `openarm_body_link0` to
+`openarm_right_grasp_frame`, so Servo's planning frame and end effector are the
+`fm_openarm_v2` profile's `base_frame` and right `ee_frame`. The running robot must
+publish that URDF's joints on `/joint_states`; verified against the `mock` backend.
+
+The launch refuses to start, with an error naming the cause, unless both guards hold:
+
+- `sim_only:=true` is passed, so the caller states the arm is simulated (fm-sim's
+  include passes it).
+- Discovery is host-local, since anything on the same DDS domain could command the
+  arm through `/servo_node`: `ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST` (the fm-sim
+  agent sets it on every run) or `ROS_LOCALHOST_ONLY=1`.
+
+Behaviour of Jazzy's Servo (moveit_servo 2.12.4), measured against the mock arm at
+joint1 1.0 unitless (0.5 rad/s commanded):
+
+- Servo accepts no command until a command type is selected; the launch selects it.
+- Each command is applied until its header stamp is `incoming_command_timeout`
+  (0.1 s) old on Servo's clock, then Servo halts smoothly. When a stream stamped
+  with the current time stops, the arm stopped within 0.25 s and moved 0.05 rad
+  further.
+- Future stamps are not rejected: a command stamped 1 s ahead kept the arm moving
+  for about 1.1 s after the stream stopped (0.34 rad further). Publishers must stamp
+  with Servo's clock.
+- Servo starts only after a joint state that changes once its loop is running. A
+  simulator's physics provides that; a `mock` robot holds still, so move it once
+  (any trajectory to its JTC) before jogging.
+- `publish_period` must be under a third of `max_expected_latency`, or Servo exits
+  at start.
 
 ## control_node
 

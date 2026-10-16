@@ -1,0 +1,60 @@
+# MoveIt Servo (Jazzy moveit_servo 2.12) for the OpenArm right arm IN SIMULATION ONLY.
+#
+# Never point this at a real arm: collision checking is off and openarm.srdf has no
+# collision matrix. A real-arm Servo needs its own reviewed profile (collision matrix,
+# collision checking on, DDS domain isolation).
+#
+# Servo reads /joint_states, turns JointJog or TwistStamped commands on its
+# ~/delta_*_cmds topics into a streamed JointTrajectory, and publishes it to the
+# right arm's joint_trajectory_controller. Planning frame and end effector are not
+# parameters on Jazzy: they come from the right_arm chain in openarm.srdf
+# (openarm_body_link0 -> openarm_right_grasp_frame).
+#
+# Ported from fm_ros2 fm_bringup config/openarm/servo.yaml (Humble). Dropped there and
+# absent here: use_gazebo, low_latency_mode, planning_frame, ee_frame_name,
+# robot_link_command_frame, collision_distance_safety_factor and
+# min_allowable_collision_distance. joint_limit_margin became joint_limit_margins.
+# test_openarm_sim_servo checks every key here against moveit_servo's declared params.
+servo_node:
+  ros__parameters:
+    moveit_servo:
+      move_group_name: right_arm
+
+      # [-1, 1] commands, as from a joystick; scale turns them into speeds.
+      command_in_type: unitless
+      scale:
+        linear: 0.4       # m/s at unit command
+        rotational: 0.8   # rad/s at unit command
+        joint: 0.5        # rad/s at unit command
+      # A command is applied until its header stamp is this old on Servo's clock,
+      # then Servo halts. A publisher must stamp each command with Servo's clock (sim
+      # time): Jazzy does not reject future stamps, so a command stamped ahead keeps
+      # the arm moving until that stamp plus this timeout.
+      incoming_command_timeout: 0.1
+
+      # Jazzy refuses to start unless publish_period < max_expected_latency / 3.
+      publish_period: 0.02  # 50 Hz command stream (Humble ran 0.034)
+      max_expected_latency: 0.1
+
+      command_out_type: trajectory_msgs/JointTrajectory
+      publish_joint_positions: true
+      publish_joint_velocities: false
+      publish_joint_accelerations: false
+
+      joint_topic: /joint_states
+      status_topic: ~/status
+      cartesian_command_in_topic: ~/delta_twist_cmds
+      joint_command_in_topic: ~/delta_joint_cmds
+      command_out_topic: /openarm_right_arm_controller/joint_trajectory
+
+      # Off: openarm.srdf has no collision matrix, so adjacent links would read as a
+      # permanent near-collision and halt every command. The launch warns about it.
+      check_collisions: false
+
+      # moveit_servo defaults, stated so a change is a reviewed diff.
+      lower_singularity_threshold: 17.0
+      hard_stop_singularity_threshold: 30.0
+      leaving_singularity_threshold_multiplier: 2.0
+
+      # One margin per right_arm joint (joint1..joint7), in rad.
+      joint_limit_margins: [0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1]

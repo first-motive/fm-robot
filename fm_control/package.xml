@@ -37,6 +37,13 @@
   <exec_depend>gz_ros2_control</exec_depend>
   <exec_depend>topic_based_ros2_control</exec_depend>
 
+  <!-- OpenArm MoveIt Servo launch: KDL IK, the command-type service, launch_ros. -->
+  <exec_depend>moveit_kinematics</exec_depend>
+  <exec_depend>moveit_msgs</exec_depend>
+  <exec_depend>ros2service</exec_depend>
+  <exec_depend>launch_ros</exec_depend>
+  <exec_depend>python3-yaml</exec_depend>
+
   <test_depend>ament_lint_auto</test_depend>
   <test_depend>ament_lint_common</test_depend>
   <test_depend>ament_cmake_gtest</test_depend>
