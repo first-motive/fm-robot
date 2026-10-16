@@ -74,11 +74,12 @@ sim_backend   openarm                     so101                            g1_d 
 The sim backends are identical across robots: only the geometry + joint set differ.
 The `real` backend is where the robots diverge — see the G1-D asymmetry below.
 
-### OpenArm Arguments
+Every robot's `sim_backend` also accepts `gz`, the simulation stack's name for
+Gazebo; `gz` and `gazebo` select the same plugin. Any value a robot does not list
+above fails the xacro run rather than emitting a system with no `<hardware>`, so
+`real` fails for the Axol. `urdf/sim_backend.xacro` holds that rule for all four.
 
-The OpenArm xacro's `sim_backend` also accepts `gz`, the simulation stack's name for
-Gazebo; `gz` and `gazebo` select the same plugin. Any other value fails the xacro
-run rather than emitting a system with no `<hardware>`.
+### OpenArm Arguments
 
 | `sim_backend` | System plugin | Notes |
 |---------------|---------------|-------|

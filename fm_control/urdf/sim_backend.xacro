@@ -1,0 +1,22 @@
+<?xml version="1.0"?>
+<!--
+Resolve a robot's sim_backend arg, shared by every <robot>.sim.urdf.xacro.
+
+fm_sim_backend sets the global property `backend` from the requested value. `gz` is
+the simulation stack's name for Gazebo, so it becomes `gazebo`, the name the
+ros2_control macros test for. Any value outside `supported` fails the xacro: an
+unknown one would otherwise emit a <ros2_control> system with no <hardware>, which
+fails only later, inside controller_manager.
+-->
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <xacro:macro name="fm_sim_backend" params="requested supported">
+    <xacro:property name="resolved" value="${'gazebo' if requested == 'gz' else requested}"/>
+    <xacro:if value="${resolved not in supported}">
+      ${xacro.fatal('unknown sim_backend: ' + str(requested)
+                    + ' (expected gz or one of ' + ', '.join(supported) + ')')}
+    </xacro:if>
+    <xacro:property name="backend" value="${resolved}" scope="global"/>
+  </xacro:macro>
+
+</robot>

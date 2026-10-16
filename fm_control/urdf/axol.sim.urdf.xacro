@@ -9,14 +9,20 @@ Axol is a fixed bimanual layout (two 7-DOF arms), so there is no preset arg — 
 variant is nominal; both arms are always emitted.
 
 Args:
-  sim_backend   mock | mujoco | gazebo | isaac  (selects the System plugin; no
-                real backend yet — Axol's CAN driver is deferred)
+  sim_backend   mock | mujoco | gz | gazebo | isaac  (selects the System plugin;
+                gz is an alias for gazebo; no real backend yet, as Axol's CAN
+                driver is deferred, so real fails the xacro like any unknown value)
   mujoco_model  MJCF the mujoco backend loads; injected by the fm_bringup registry
                 from fm_sim_models when sim_backend=mujoco (empty default otherwise)
 -->
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="axol">
 
   <xacro:arg name="sim_backend" default="mock"/>
+  <!-- Sets `backend`: gz becomes gazebo, and an unknown value fails the xacro. -->
+  <xacro:include filename="$(find fm_control)/urdf/sim_backend.xacro"/>
+  <xacro:fm_sim_backend
+      requested="$(arg sim_backend)"
+      supported="${['mock', 'mujoco', 'gazebo', 'isaac']}"/>
   <xacro:arg name="isaac_joint_commands_topic" default="/isaac_joint_commands"/>
   <xacro:arg name="isaac_joint_states_topic" default="/isaac_joint_states"/>
   <!-- MujocoSystemInterface reads the MJCF from a URDF <param>. The path is owned by
@@ -41,24 +47,24 @@ Args:
   <xacro:property name="left_elbow_ready" value="1.0"/>
   <xacro:property name="right_elbow_ready" value="-1.0"/>
 
-  <xacro:if value="${'$(arg sim_backend)' in single_system_backends}">
+  <xacro:if value="${backend in single_system_backends}">
     <xacro:axol_single_system
-        sim_backend="$(arg sim_backend)"
+        sim_backend="${backend}"
         left_elbow_ready="${left_elbow_ready}"
         right_elbow_ready="${right_elbow_ready}"
         mujoco_model_path="${mujoco_model_path}"/>
   </xacro:if>
-  <xacro:unless value="${'$(arg sim_backend)' in single_system_backends}">
+  <xacro:unless value="${backend in single_system_backends}">
     <xacro:axol_arm_system
         prefix="left_"
-        sim_backend="$(arg sim_backend)"
+        sim_backend="${backend}"
         elbow_ready="${left_elbow_ready}"
         mujoco_model_path="${mujoco_model_path}"
         isaac_joint_commands_topic="$(arg isaac_joint_commands_topic)"
         isaac_joint_states_topic="$(arg isaac_joint_states_topic)"/>
     <xacro:axol_arm_system
         prefix="right_"
-        sim_backend="$(arg sim_backend)"
+        sim_backend="${backend}"
         elbow_ready="${right_elbow_ready}"
         mujoco_model_path="${mujoco_model_path}"
         isaac_joint_commands_topic="$(arg isaac_joint_commands_topic)"
@@ -67,7 +73,7 @@ Args:
 
   <!-- Gazebo hosts the controller_manager inside the sim via this world plugin,
        which loads the controllers.yaml. Emitted only for the gazebo backend. -->
-  <xacro:if value="${'$(arg sim_backend)' == 'gazebo'}">
+  <xacro:if value="${backend == 'gazebo'}">
     <gazebo>
       <plugin filename="gz_ros2_control-system"
               name="gz_ros2_control::GazeboSimROS2ControlPlugin">
