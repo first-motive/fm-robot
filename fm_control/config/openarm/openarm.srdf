@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+MoveIt semantics for the OpenArm right arm in fm_control's canonical openarm_* names,
+for the sim-only Servo (launch/openarm_sim_servo.launch.py).
+
+Pairs with openarm.sim.urdf.xacro built as robot_preset:=default_bimanual
+emit_grasp_frame:=true. The right_arm group is a chain from the body to the pinch
+gripper's grasp frame, so MoveIt's IK base (Servo's planning frame) is
+openarm_body_link0 and the chain tip (Servo's end effector) is the fm_openarm_v2
+profile's ee_frame. Only the seven revolute arm joints are active in the chain; the
+fixed mount and grasp-frame joints add no DOF.
+
+There is no collision matrix, so this SRDF is not fit for a real arm: servo_sim.yaml
+runs with collision checking off.
+-->
+<!-- Robot name matches openarm.sim.urdf.xacro; MoveIt rejects a mismatched pair. -->
+<robot name="openarm_v20">
+    <group name="right_arm">
+        <chain base_link="openarm_body_link0" tip_link="openarm_right_grasp_frame"/>
+    </group>
+</robot>
