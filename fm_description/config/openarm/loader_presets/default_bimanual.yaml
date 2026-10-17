@@ -1,0 +1,130 @@
+# The OpenArm the loader runs on fm-rob-01: openarm_description v2.0's default_bimanual
+# arm with the loader's joint limits and no v2.0 end effector. The loader's parallel
+# hand replaces the pinch gripper; openarm.sim.urdf.xacro adds it to each arm from
+# urdf/openarm_parallel_hand.xacro.
+#
+# Source: the loader URDF snapshot in fm-skills
+# (openarm_v2_skills_config/urdf/openarm_anvil.urdf, loader image ros2:1.2.16). Its arm
+# matches v2.0 to 0.002 mm and every joint sign agrees, so its limits copy across 1:1.
+# They are the limits the loader enforces, not measured mechanical stops.
+#
+# openarm_description mirrors a reflected joint's limits after applying the override,
+# so the left arm takes the right arm's values here and ends up as the loader's left
+# arm: joint2 -3.3161..0.1745 and joint6 -0.785398..1.22173. joint4 is not reflected.
+#
+# Schema: openarm_description assets/robot/openarm_v2.0/config/robot_presets.
+
+robot:
+  root_frame: world
+  components:
+    - body
+    - primary_arm
+    - secondary_arm
+    - primary_arm_end_effector
+    - secondary_arm_end_effector
+
+body:
+  type: robot
+  enabled: true
+  product: openarm_v2.0
+  config: body
+  inertials: nominal
+  link_name: openarm_body_link0
+  connection:
+    parent: world
+    origin:
+      x: 0.0
+      y: 0.0
+      z: 0.0
+      roll: 0.0
+      pitch: 0.0
+      yaw: 0.0
+  reflect:
+    x: 1
+    y: 1
+    z: 1
+  limit_override_joints: {}
+
+primary_arm:
+  type: robot
+  enabled: true
+  product: openarm_v2.0
+  config: arm
+  inertials: nominal
+  prefix: openarm_left_
+  connection:
+    attach_to: body
+    parent_reference_point: left_arm_mount_point
+    parent: null
+    origin: null
+  reflect:
+    x: 1
+    y: -1
+    z: 1
+    include:
+      links: [base_link, link1, link2, link5, link6, link7]
+      joints: [joint1, joint2, joint3, joint5, joint6, joint7]
+      reference_points: [ee_mount_point]
+  limit_override_joints: &loader_limits
+    joint1: {lower: -2.3562, upper: 2.3562, effort: 40, velocity: 2.5}
+    joint2: {lower: -0.1745, upper: 3.3161, effort: 40, velocity: 2.5}
+    joint3: {lower: -1.570796, upper: 1.570796, effort: 27, velocity: 3.0}
+    joint4: {lower: 0.0, upper: 2.443461, effort: 27, velocity: 5.5}
+    joint5: {lower: -1.570796, upper: 1.570796, effort: 7, velocity: 15.0}
+    joint6: {lower: -1.22173, upper: 0.785398, effort: 7, velocity: 16.5}
+    joint7: {lower: -1.570796, upper: 1.570796, effort: 7, velocity: 16.5}
+
+secondary_arm:
+  type: robot
+  enabled: true
+  product: openarm_v2.0
+  config: arm
+  inertials: nominal
+  prefix: openarm_right_
+  connection:
+    attach_to: body
+    parent_reference_point: right_arm_mount_point
+    parent: null
+    origin: null
+  reflect:
+    x: 1
+    y: 1
+    z: 1
+  limit_override_joints: *loader_limits
+
+# Disabled: the parallel hand is not an openarm_description end effector.
+primary_arm_end_effector:
+  type: end_effector
+  enabled: false
+  product: pinch_gripper
+  config: null
+  inertials: nominal
+  prefix: openarm_left_
+  connection:
+    attach_to: primary_arm
+    parent_reference_point: ee_mount_point
+    parent: null
+    origin: null
+  reflect:
+    x: 1
+    y: -1
+    z: 1
+  limit_override_joints: {}
+
+secondary_arm_end_effector:
+  type: end_effector
+  enabled: false
+  product: pinch_gripper
+  config: null
+  inertials: nominal
+  prefix: openarm_right_
+  connection:
+    attach_to: secondary_arm
+    parent_reference_point: ee_mount_point
+    parent: null
+    origin: null
+  reflect:
+    x: 1
+    y: 1
+    z: 1
+  limit_override_joints: {}
