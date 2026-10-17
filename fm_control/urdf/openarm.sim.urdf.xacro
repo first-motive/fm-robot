@@ -10,6 +10,13 @@ arms the preset enables, so single-arm presets (right_arm) and bimanual presets
 
 Args:
   robot_preset   openarm_description v2.0 preset (right_arm, default_bimanual, ...)
+  hand           loader | pinch  (default loader). loader is the arm fm-rob-01's loader
+                 runs: its parallel-jaw hand (prismatic fingers, 0..0.05 m, grasp_frame
+                 0.18 m out) and its joint limits, from fm_description's loader
+                 variant of robot_preset. pinch is openarm_description's stock preset
+                 with the v2.0 pinch gripper. right_arm and left_arm carry no gripper,
+                 so they stay stock under either value; a gripper preset with no
+                 loader variant fails under loader. Only default_bimanual has one.
   sim_backend    mock | mujoco | gz | gazebo | isaac | real  (selects the System
                  plugin; gz is an alias for gazebo, anything else fails the xacro)
   can_interface  SocketCAN device for the real backend (ignored by sim backends)
@@ -19,6 +26,7 @@ Args:
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="openarm_v20">
 
   <xacro:arg name="robot_preset" default="right_arm"/>
+  <xacro:arg name="hand" default="loader"/>
   <xacro:arg name="sim_backend" default="mock"/>
   <!-- Sets `backend`: gz becomes gazebo, and an unknown value fails the xacro. -->
   <xacro:include filename="$(find fm_control)/urdf/sim_backend.xacro"/>
@@ -44,11 +52,38 @@ Args:
   <xacro:include filename="$(find openarm_description)/assets/robot/openarm_v2.0/urdf/utils/openarm_v20_robot.xacro"/>
   <xacro:include filename="$(find fm_control)/urdf/openarm.ros2_control.xacro"/>
   <xacro:include filename="$(find fm_description)/urdf/openarm_cameras.xacro"/>
+  <xacro:include filename="$(find fm_description)/urdf/openarm_parallel_hand.xacro"/>
 
   <xacro:property name="robot_root" value="$(find openarm_description)/assets/robot/openarm_v2.0"/>
   <xacro:property name="config_root" value="${robot_root + '/config'}"/>
+
+  <!-- The preset name becomes a file path, so it must be a plain name. -->
+  <xacro:property name="preset_name" value="$(arg robot_preset)"/>
+  <xacro:unless value="${preset_name[:1].isalpha() and preset_name.isascii()
+                         and preset_name.replace('_', '').isalnum()}">
+    ${xacro.fatal('invalid robot_preset: ' + repr(preset_name))}
+  </xacro:unless>
+  <!-- `hand` is the arg as given; `loader_hand` below is whether the loader hand is
+       built. An arm spec's `hand` key says only that the arm has some gripper. -->
+  <xacro:property name="hand" value="$(arg hand)"/>
+  <xacro:unless value="${hand in ['loader', 'pinch']}">
+    ${xacro.fatal('unknown hand: ' + str(hand) + ' (expected loader or pinch)')}
+  </xacro:unless>
+  <xacro:property name="stock_cfg"
+      value="${xacro.load_yaml(config_root + '/robot_presets/' + preset_name + '.yaml')}"/>
+  <!-- Presets fm_description has a loader variant of, under config/openarm/loader_presets. -->
+  <xacro:property name="loader_presets" value="${['default_bimanual']}"/>
+  <xacro:property name="loader_hand" value="${hand == 'loader' and preset_name in loader_presets}"/>
+  <xacro:if value="${hand == 'loader' and not loader_hand
+                     and len([n for n in stock_cfg['robot']['components']
+                              if stock_cfg[n]['type'] == 'end_effector'
+                              and stock_cfg[n]['enabled']]) > 0}">
+    ${xacro.fatal('robot_preset ' + preset_name + ' has no loader-hand variant'
+                  + ' (one of ' + ', '.join(loader_presets) + '); pass hand:=pinch')}
+  </xacro:if>
   <xacro:property name="preset_cfg"
-      value="${xacro.load_yaml(config_root + '/robot_presets/' + '$(arg robot_preset)' + '.yaml')}"/>
+      value="${xacro.load_yaml('$(find fm_description)/config/openarm/loader_presets/'
+                               + preset_name + '.yaml') if loader_hand else stock_cfg}"/>
 
   <!-- Emit links + joints for the preset. -->
   <xacro:openarm_v20_robot
@@ -58,8 +93,8 @@ Args:
       emit_grasp_frame="$(arg emit_grasp_frame)"/>
 
   <!-- Resolve one spec per enabled arm: its prefix and whether it carries a gripper
-       (an enabled end_effector attached to it). Iteration order follows the preset's
-       robot.components, so joint order matches the geometry. -->
+       (the loader hand, or an enabled end_effector attached to it). Iteration order
+       follows the preset's robot.components, so joint order matches the geometry. -->
   <xacro:property name="components" value="${preset_cfg['robot']['components']}"/>
   <xacro:property name="arm_names"
       value="${[n for n in components
@@ -81,13 +116,27 @@ Args:
                      ready=[(preset_cfg[n].get('reflect', dict()).get('y', 1) if i != 3 else 1)
                             * (ready_bimanual if len(arm_names) > 1 else ready_single)[i]
                             for i in python.range(7)],
-                     hand=len([m for m in components
+                     hand=loader_hand or len([m for m in components
                                if preset_cfg[m]['type'] == 'end_effector'
                                and preset_cfg[m]['enabled']
                                and 'connection' in preset_cfg[m]
                                and 'attach_to' in preset_cfg[m]['connection']
                                and preset_cfg[m]['connection']['attach_to'] == n]) > 0)
                 for n in arm_names]}"/>
+
+  <!-- The loader hand on every arm, one arm per call. -->
+  <xacro:macro name="openarm_parallel_hands" params="arm_specs index">
+    <xacro:if value="${index &lt; len(arm_specs)}">
+      <xacro:openarm_parallel_hand
+          prefix="${arm_specs[index]['prefix']}"
+          flange="${arm_specs[index]['prefix']}link7"
+          emit_grasp_frame="$(arg emit_grasp_frame)"/>
+      <xacro:openarm_parallel_hands arm_specs="${arm_specs}" index="${index + 1}"/>
+    </xacro:if>
+  </xacro:macro>
+  <xacro:if value="${loader_hand}">
+    <xacro:openarm_parallel_hands arm_specs="${arm_specs}" index="0"/>
+  </xacro:if>
 
   <xacro:property name="single_system_backends" value="${['mujoco', 'gazebo']}"/>
 
@@ -119,6 +168,7 @@ Args:
       body="${'body' in components and preset_cfg['body']['enabled']}"
       right_arm="${len(right_arms) > 0}"
       right_hand="${len(right_arms) > 0 and right_arms[0]['hand']}"
+      loader_hand="${loader_hand}"
       collapse_empty_links="$(arg collapse_internal_empty_links)"/>
 
   <!-- Gazebo hosts the controller_manager inside the sim via this world plugin,

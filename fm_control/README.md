@@ -95,8 +95,20 @@ xacro $(ros2 pkg prefix fm_control)/share/fm_control/urdf/openarm.sim.urdf.xacro
 ```
 
 `emit_grasp_frame` defaults to `false`. Pass `emit_grasp_frame:=true` for the
-fm-skills `fm_openarm_v2` robot profile, whose `ee_frame` is the pinch gripper's
+fm-skills `fm_openarm_v2` robot profile, whose `ee_frame` is
 `openarm_*_grasp_frame`; without it that frame does not exist.
+
+`hand` picks the gripper on a preset that has one:
+
+| `hand` | Gripper | Arm limits | Source |
+|--------|---------|------------|--------|
+| `loader` (default) | parallel jaw: `openarm_*_hand`, prismatic `finger_joint1`/`2` over 0..0.05 m, `grasp_frame` 0.1801 m out from link7, approaching along its +z | the loader's: joint1 ±2.3562, joint6 -1.22173..0.785398 (left mirrored), lower velocities | `fm_description/config/openarm/loader_presets/`, `fm_description/urdf/openarm_parallel_hand.xacro` |
+| `pinch` | openarm_description v2.0 pinch gripper: revolute fingers over ±0.7854 rad, `grasp_frame` 0.138 m out, approaching along its +x | openarm_description v2.0's | the stock `robot_preset` |
+
+`loader` reproduces the arm fm-rob-01's loader runs, from the loader URDF snapshot in
+fm-skills. Its arm kinematics are v2.0's; only the hand and the limits differ. Only
+`default_bimanual` has a loader variant. `right_arm` and `left_arm` carry no gripper
+and stay stock under either value; any other gripper preset needs `hand:=pinch`.
 
 The OpenArm description also carries the chest and right wrist camera frames from
 `fm_description/urdf/openarm_cameras.xacro`, on whichever links the preset enables.
@@ -177,7 +189,8 @@ ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST \
 | `robot_description` | URDF string, default empty | empty builds the URDF locally; a passed one must contain `openarm_body_link0` and `openarm_right_grasp_frame` |
 
 Servo always runs on sim time (`use_sim_time: true`). The local URDF is
-`default_bimanual` with `emit_grasp_frame:=true`, the model the SRDF names. Its
+`default_bimanual` with `emit_grasp_frame:=true` and the default loader hand, the
+model the SRDF names; the pinch hand gives the same chain. Its
 `right_arm` group is a chain from `openarm_body_link0` to
 `openarm_right_grasp_frame`, so Servo's planning frame and end effector are the
 `fm_openarm_v2` profile's `base_frame` and right `ee_frame`. The running robot must

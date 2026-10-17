@@ -29,6 +29,8 @@ the URDF. A viz client (RViz or Foxglove) subscribes these topics.
 ```
 urdf/     fm_robot.urdf.xacro   (placeholder — replace with the real robot)
           openarm_cameras.xacro (OpenArm camera frames, see below)
+          openarm_parallel_hand.xacro (the loader's OpenArm hand, used by fm_control)
+config/   openarm/loader_presets/ (OpenArm presets with the loader's limits)
 meshes/   visual + collision geometry
 launch/   description-only launch helpers
 ```
@@ -258,12 +260,13 @@ the poses and their calibration history came from fm-skills, renamed to `openarm
 | Link | Parent | Emitted when |
 |------|--------|--------------|
 | `openarm_cam_chest_optical` | `openarm_body_link0` | the preset enables the body |
-| `openarm_right_cam_wrist_mount` | `openarm_right_link7` (or `openarm_right_ee_base_link` when link7 is collapsed into it) | the preset has a right arm |
-| `openarm_right_cam_wrist_optical` | `openarm_right_cam_wrist_mount` | the preset has a right arm |
+| `openarm_right_cam_wrist_mount` | `openarm_right_link7` (or `openarm_right_ee_base_link` when link7 is collapsed into it) | the preset has a right arm and no loader hand |
+| `openarm_right_cam_wrist_optical` | `openarm_right_hand` with the loader hand, else `openarm_right_cam_wrist_mount` | the preset has a right arm |
 
-Each joint is the link name plus `_joint`. The wrist mount is the hand frame the
-wrist pose was measured against: it sits 100.1 mm out from link7 along the wrist,
-flipped about x.
+Each joint is the link name plus `_joint`. The wrist pose was measured against the
+loader's hand frame, 100.1 mm out from link7 along the wrist and flipped about x.
+With the loader hand that frame is `openarm_right_hand`; without it the wrist mount
+stands in at the same pose.
 
 The `view_robot` OpenArm entry still processes the upstream `openarm_description`
 xacro, so it does not show these frames.
