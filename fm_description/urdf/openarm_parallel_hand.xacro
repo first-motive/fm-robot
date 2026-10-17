@@ -1,0 +1,116 @@
+<?xml version="1.0"?>
+<!--
+The loader's parallel-jaw hand for one OpenArm v2.0 arm, in openarm_* names.
+
+fm-rob-01's loader fits Enactic's v1.0 parallel hand to the v2.0 arm. This macro
+copies that hand from the loader URDF snapshot in fm-skills
+(openarm_v2_skills_config/urdf/openarm_anvil.urdf, loader image ros2:1.2.16):
+frames, finger offsets, limits and inertials. The meshes are openarm_description's
+parallel_link set, the same v1.0 hand. Its collision meshes are byte-identical to
+openarm_mujoco v1's, and like the loader's they are authored in a global mm frame,
+hence the large z offsets.
+
+  snapshot (follower_r_*)        here (<prefix> = openarm_right_)
+  link7 (flange)            ->   <prefix>ee_base_link, fixed at link7's frame
+  hand                      ->   <prefix>hand: ee_base_link + (0, 0, -0.1001), rpy (pi, 0, 0)
+  hand_tcp                  ->   <prefix>grasp_frame: hand + (0, 0, 0.08), approach +z
+  right_finger, left_finger ->   <prefix>right_finger, <prefix>left_finger
+  finger_joint1, 2          ->   <prefix>finger_joint1, 2: prismatic 0..0.05 m, 2 mimics 1
+
+The loader's link7 frame is rotated against openarm_description's; the snapshot's
+hand pose, written from link7 as (0, 0, 0.1001), rpy (0, 0, pi/2), is the same frame
+as the one above. Both arms use the same pose.
+
+Args:
+  prefix            arm prefix, e.g. openarm_right_
+  flange            the link joint7 drives (the arm's link7)
+  emit_grasp_frame  add <prefix>grasp_frame, the robot profile's ee_frame
+-->
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <xacro:property name="parallel_hand_meshes"
+      value="package://openarm_description/assets/end_effector/parallel_link/meshes"/>
+
+  <!-- Visual and collision share an origin and mesh. scale_y -1 mirrors the finger mesh. -->
+  <xacro:macro name="openarm_parallel_hand_geometry" params="name mesh xyz scale_y:=1">
+    <visual name="${name}_visual">
+      <origin xyz="${xyz}" rpy="0 0 0"/>
+      <geometry>
+        <mesh filename="${parallel_hand_meshes}/visual/${mesh}.dae"
+              scale="0.001 ${0.001 * scale_y} 0.001"/>
+      </geometry>
+    </visual>
+    <collision name="${name}_collision">
+      <origin xyz="${xyz}" rpy="0 0 0"/>
+      <geometry>
+        <mesh filename="${parallel_hand_meshes}/collision/${mesh}.stl"
+              scale="0.001 ${0.001 * scale_y} 0.001"/>
+      </geometry>
+    </collision>
+  </xacro:macro>
+
+  <!-- One finger link and its prismatic joint. side_sign is -1 for the right finger
+       (joint1, closing along -y of the hand) and +1 for the left (joint2). -->
+  <xacro:macro name="openarm_parallel_finger" params="prefix finger joint side_sign mimic">
+    <link name="${prefix}${finger}_finger">
+      <xacro:openarm_parallel_hand_geometry
+          name="${prefix}${finger}_finger" mesh="finger"
+          xyz="0 ${-0.05 * side_sign} -0.673001" scale_y="${side_sign}"/>
+      <inertial>
+        <origin xyz="0.0064528 ${0.01702 * side_sign} 0.0219685" rpy="0 0 0"/>
+        <mass value="0.03602545343277134"/>
+        <inertia ixx="2.375e-06" ixy="0.0" ixz="0.0" iyy="2.375e-06" iyz="0.0" izz="7.5e-07"/>
+      </inertial>
+    </link>
+    <joint name="${prefix}${joint}" type="prismatic">
+      <parent link="${prefix}hand"/>
+      <child link="${prefix}${finger}_finger"/>
+      <origin xyz="0 ${0.006 * side_sign} 0.015" rpy="0 0 0"/>
+      <axis xyz="0 ${side_sign} 0"/>
+      <limit lower="0.0" upper="0.05" effort="333" velocity="10.0"/>
+      <xacro:if value="${mimic}">
+        <mimic joint="${prefix}finger_joint1" multiplier="1" offset="0"/>
+      </xacro:if>
+    </joint>
+  </xacro:macro>
+
+  <xacro:macro name="openarm_parallel_hand" params="prefix flange emit_grasp_frame">
+    <!-- The pinch preset's flange name, so the arm ends in the same link either way. -->
+    <link name="${prefix}ee_base_link"/>
+    <joint name="${prefix}ee_base_joint" type="fixed">
+      <parent link="${flange}"/>
+      <child link="${prefix}ee_base_link"/>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+    </joint>
+
+    <link name="${prefix}hand">
+      <xacro:openarm_parallel_hand_geometry
+          name="${prefix}hand" mesh="hand" xyz="0 0 -0.6585"/>
+      <inertial>
+        <origin xyz="0 0 0.03" rpy="0 0 0"/>
+        <mass value="0.7"/>
+        <inertia ixx="0.0002473" ixy="0.0" ixz="0.0" iyy="1.763e-05" iyz="0.0" izz="0.0002521"/>
+      </inertial>
+    </link>
+    <joint name="${prefix}hand_joint" type="fixed">
+      <parent link="${prefix}ee_base_link"/>
+      <child link="${prefix}hand"/>
+      <origin xyz="0 0 -0.1001" rpy="${pi} 0 0"/>
+    </joint>
+
+    <xacro:if value="${emit_grasp_frame}">
+      <link name="${prefix}grasp_frame"/>
+      <joint name="${prefix}grasp_frame_joint" type="fixed">
+        <parent link="${prefix}hand"/>
+        <child link="${prefix}grasp_frame"/>
+        <origin xyz="0 0 0.08" rpy="0 0 0"/>
+      </joint>
+    </xacro:if>
+
+    <xacro:openarm_parallel_finger
+        prefix="${prefix}" finger="right" joint="finger_joint1" side_sign="-1" mimic="false"/>
+    <xacro:openarm_parallel_finger
+        prefix="${prefix}" finger="left" joint="finger_joint2" side_sign="1" mimic="true"/>
+  </xacro:macro>
+
+</robot>

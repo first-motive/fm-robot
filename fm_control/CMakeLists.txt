@@ -101,6 +101,9 @@ if(BUILD_TESTING)
   find_package(ament_cmake_pytest REQUIRED)
   ament_add_pytest_test(test_openarm_xacro test/test_openarm_xacro.py
     TIMEOUT 120)
+  # Checks the loader-hand preset against the loader's limits and FK.
+  ament_add_pytest_test(test_openarm_loader_hand test/test_openarm_loader_hand.py
+    TIMEOUT 120)
   ament_add_pytest_test(test_axol_xacro test/test_axol_xacro.py
     TIMEOUT 120)
   # Checks the sim Servo SRDF and params against the generated URDF and moveit_servo.

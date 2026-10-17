@@ -35,11 +35,7 @@ PLUGIN_BY_BACKEND = {
     'real': 'openarm_hardware/OpenArmHW',
 }
 
-CAMERA_LINKS = {
-    'openarm_cam_chest_optical',
-    'openarm_right_cam_wrist_mount',
-    'openarm_right_cam_wrist_optical',
-}
+CAMERA_LINKS = {'openarm_cam_chest_optical', 'openarm_right_cam_wrist_optical'}
 
 
 def _process(**mappings):
@@ -158,8 +154,9 @@ def test_isaac_topics():
     [('default_bimanual', 'true'), ('default_bimanual', 'false'), ('right_arm', 'true')],
 )
 def test_wrist_camera_rides_link7_frame(preset, collapse):
-    # Whatever link the preset names, the wrist pose is measured from joint7's child.
-    robot = _process(robot_preset=preset, collapse_internal_empty_links=collapse)
+    # Without the loader hand, the wrist pose is measured from joint7's child,
+    # whatever link the preset names.
+    robot = _process(robot_preset=preset, collapse_internal_empty_links=collapse, hand='pinch')
     mount = robot.find("joint[@name='openarm_right_cam_wrist_mount_joint']")
     joint7 = robot.find("joint[@name='openarm_right_joint7']")
     assert mount.find('parent').get('link') == joint7.find('child').get('link')
