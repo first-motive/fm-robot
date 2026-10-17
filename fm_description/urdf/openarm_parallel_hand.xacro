@@ -11,7 +11,8 @@ openarm_mujoco v1's, and like the loader's they are authored in a global mm fram
 hence the large z offsets.
 
   snapshot (follower_r_*)        here (<prefix> = openarm_right_)
-  link7 (flange)            ->   <prefix>ee_base_link, fixed at link7's frame
+  link7 (flange)            ->   <prefix>ee_base_link, fixed at link7's frame, with
+                                 link7's v1.0 wrist mesh and inertial
   hand                      ->   <prefix>hand: ee_base_link + (0, 0, -0.1001), rpy (pi, 0, 0)
   hand_tcp                  ->   <prefix>grasp_frame: hand + (0, 0, 0.08), approach +z
   right_finger, left_finger ->   <prefix>right_finger, <prefix>left_finger
@@ -21,32 +22,49 @@ The loader's link7 frame is rotated against openarm_description's; the snapshot'
 hand pose, written from link7 as (0, 0, 0.1001), rpy (0, 0, pi/2), is the same frame
 as the one above. Both arms use the same pose.
 
+openarm_description v2.0 leaves link7 bare and puts the wrist on its end effector,
+so with no v2.0 end effector the loader's link7 geometry and its 0.466 kg go on
+ee_base_link. The loader's link7 frame is ee_base_link turned half a turn about
+(1, mirror, 0): rpy (pi, 0, mirror * pi/2). The mesh (openarm_description's
+openarm_v1.0 link7) sits at (0, 0, -0.5585) in that frame, (0, 0, 0.5585) here; the
+inertial is the loader's, rotated into ee_base_link. fm-sim's patched OpenArm MJCF
+carries the same numbers, so every backend has the same wrist.
+
 Args:
   prefix            arm prefix, e.g. openarm_right_
   flange            the link joint7 drives (the arm's link7)
+  mirror            the arm's reflect on y: 1 for the right arm, -1 for the left
   emit_grasp_frame  add <prefix>grasp_frame, the robot profile's ee_frame
 -->
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro">
 
   <xacro:property name="parallel_hand_meshes"
       value="package://openarm_description/assets/end_effector/parallel_link/meshes"/>
+  <xacro:property name="v1_arm_meshes"
+      value="package://openarm_description/assets/robot/openarm_v1.0/mesh/arm"/>
 
-  <!-- Visual and collision share an origin and mesh. scale_y -1 mirrors the finger mesh. -->
-  <xacro:macro name="openarm_parallel_hand_geometry" params="name mesh xyz scale_y:=1">
+  <!-- Visual and collision share an origin. scale_y -1 mirrors the mesh. -->
+  <xacro:macro name="openarm_mesh_geometry"
+      params="name visual collision xyz rpy:='0 0 0' scale_y:=1">
     <visual name="${name}_visual">
-      <origin xyz="${xyz}" rpy="0 0 0"/>
+      <origin xyz="${xyz}" rpy="${rpy}"/>
       <geometry>
-        <mesh filename="${parallel_hand_meshes}/visual/${mesh}.dae"
-              scale="0.001 ${0.001 * scale_y} 0.001"/>
+        <mesh filename="${visual}" scale="0.001 ${0.001 * scale_y} 0.001"/>
       </geometry>
     </visual>
     <collision name="${name}_collision">
-      <origin xyz="${xyz}" rpy="0 0 0"/>
+      <origin xyz="${xyz}" rpy="${rpy}"/>
       <geometry>
-        <mesh filename="${parallel_hand_meshes}/collision/${mesh}.stl"
-              scale="0.001 ${0.001 * scale_y} 0.001"/>
+        <mesh filename="${collision}" scale="0.001 ${0.001 * scale_y} 0.001"/>
       </geometry>
     </collision>
+  </xacro:macro>
+
+  <xacro:macro name="openarm_parallel_hand_geometry" params="name mesh xyz scale_y:=1">
+    <xacro:openarm_mesh_geometry
+        name="${name}" xyz="${xyz}" scale_y="${scale_y}"
+        visual="${parallel_hand_meshes}/visual/${mesh}.dae"
+        collision="${parallel_hand_meshes}/collision/${mesh}.stl"/>
   </xacro:macro>
 
   <!-- One finger link and its prismatic joint. side_sign is -1 for the right finger
@@ -74,9 +92,24 @@ Args:
     </joint>
   </xacro:macro>
 
-  <xacro:macro name="openarm_parallel_hand" params="prefix flange emit_grasp_frame">
-    <!-- The pinch preset's flange name, so the arm ends in the same link either way. -->
-    <link name="${prefix}ee_base_link"/>
+  <xacro:macro name="openarm_parallel_hand" params="prefix flange mirror emit_grasp_frame">
+    <!-- The pinch preset's flange name, so the arm ends in the same link either way.
+         It carries the loader's link7 wrist (see the header); the left arm's mesh
+         and inertial are the right's mirrored in y. -->
+    <link name="${prefix}ee_base_link">
+      <xacro:openarm_mesh_geometry
+          name="${prefix}link7" xyz="0 0 0.5585" rpy="${pi} 0 ${mirror * pi / 2}"
+          scale_y="${mirror}"
+          visual="${v1_arm_meshes}/visual/link7.dae"
+          collision="${v1_arm_meshes}/collision/link7_symp.stl"/>
+      <inertial>
+        <origin xyz="0.01266175250761268 ${mirror * 6.875510271106056e-05} -0.06951945409987448"
+                rpy="0 0 0"/>
+        <mass value="0.4659771327380578"/>
+        <inertia ixx="0.000497" ixy="${mirror * 1e-06}" ixz="-8.9e-05"
+                 iyy="0.000639" iyz="${mirror * -1e-06}" izz="0.000342"/>
+      </inertial>
+    </link>
     <joint name="${prefix}ee_base_joint" type="fixed">
       <parent link="${flange}"/>
       <child link="${prefix}ee_base_link"/>
