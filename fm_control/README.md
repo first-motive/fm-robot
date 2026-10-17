@@ -106,9 +106,16 @@ fm-skills `fm_openarm_v2` robot profile, whose `ee_frame` is
 | `pinch` | openarm_description v2.0 pinch gripper: revolute fingers over ±0.7854 rad, `grasp_frame` 0.138 m out, approaching along its +x | openarm_description v2.0's | the stock `robot_preset` |
 
 `loader` reproduces the arm fm-rob-01's loader runs, from the loader URDF snapshot in
-fm-skills. Its arm kinematics are v2.0's; only the hand and the limits differ. Only
-`default_bimanual` has a loader variant. `right_arm` and `left_arm` carry no gripper
-and stay stock under either value; any other gripper preset needs `hand:=pinch`.
+fm-skills. Its arm kinematics are v2.0's; only the hand, the wrist and the limits
+differ. v2.0 puts the wrist on its end effector, so `openarm_*_ee_base_link` carries the
+loader's v1.0 link7 mesh and its 0.466 kg inertial. Only `default_bimanual` has a
+loader variant. `right_arm` and `left_arm` carry no gripper and stay stock under
+either value; any other gripper preset needs `hand:=pinch`.
+
+The bimanual preset spawns both arms in a mirrored ready pose (the `initial_value` of
+each joint). The 168 mm loader hands touch at the pinch pose, so with `hand:=loader`
+joint2 opens from 0.0265 to 0.13 rad: the grasp frames sit 210 mm apart and the arms
+keep at least 40 mm clear, fingers open or closed.
 
 The OpenArm description also carries the chest and right wrist camera frames from
 `fm_description/urdf/openarm_cameras.xacro`, on whichever links the preset enables.
