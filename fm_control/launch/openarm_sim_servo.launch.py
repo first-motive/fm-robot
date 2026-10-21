@@ -27,12 +27,17 @@ Brings up ``/servo_node`` on sim time with the description, SRDF, KDL kinematics
 accepts no command until ``~/switch_command_type`` is called. If Servo rejects the
 type, the launch shuts down.
 
+The arm comes under one of two sets of names, each with its own SRDF, description
+xacro and trajectory controller (see ``NAMES``): ``openarm`` is fm_control's
+``openarm_*`` model, ``loader`` is anvil-loader's ``follower_*`` model from
+``openarm_loader.sim.urdf.xacro``.
+
     sim_only           must be 'true' (default 'false'): the caller states this is a sim
     command_type       joint_jog | twist (default joint_jog)
-    robot_description  URDF Servo plans with (default: built here as
-                       default_bimanual with the grasp frame, the model
-                       openarm.srdf names). A passed URDF must carry the
-                       right_arm chain links.
+    names              openarm | loader (default openarm)
+    robot_description  URDF Servo plans with (default: built here from the names'
+                       xacro, the model their SRDF names). A passed URDF must carry
+                       the right_arm chain links.
 
 Servo's topics are reachable by anything on the same DDS domain, so the launch
 refuses to start unless discovery is host-local: ``ROS_AUTOMATIC_DISCOVERY_RANGE=
@@ -54,10 +59,30 @@ from launch_ros.actions import Node
 import xacro
 import yaml
 
-# The model openarm.srdf names; test_openarm_sim_servo checks the SRDF against it.
-DESCRIPTION_ARGS = {'robot_preset': 'default_bimanual', 'emit_grasp_frame': 'true'}
-# The right_arm chain ends; a passed robot_description must contain both.
-CHAIN_LINKS = ('openarm_body_link0', 'openarm_right_grasp_frame')
+# Per set of names: the SRDF in config/openarm, the xacro and args that build the
+# model it names, the right_arm chain ends a passed robot_description must contain,
+# and the right arm's trajectory controller topic Servo streams to. The loader's
+# xacro includes a private description, so its local build works only where that is
+# installed; fm-sim passes the run's description instead.
+NAMES = {
+    'openarm': {
+        'srdf': 'openarm.srdf',
+        'xacro': 'openarm.sim.urdf.xacro',
+        'xacro_args': {'robot_preset': 'default_bimanual', 'emit_grasp_frame': 'true'},
+        'chain': ('openarm_body_link0', 'openarm_right_grasp_frame'),
+        'command_out_topic': '/openarm_right_arm_controller/joint_trajectory',
+    },
+    # The loader-named description comes from the private openarm_v2_anvil_description:
+    # a local build without robot_description works only where it is installed, so
+    # fm-sim passes the run's description instead.
+    'loader': {
+        'srdf': 'openarm_loader.srdf',
+        'xacro': 'openarm_loader.sim.urdf.xacro',
+        'xacro_args': {},
+        'chain': ('follower_body_link0', 'follower_r_hand_tcp'),
+        'command_out_topic': '/follower_r_jtc/joint_trajectory',
+    },
+}
 # moveit_msgs/srv/ServoCommandType values this launch offers.
 COMMAND_TYPES = {'joint_jog': 0, 'twist': 1}
 # fm-teleop's contract publishes on /servo_node/delta_*_cmds.
@@ -73,21 +98,23 @@ def share_file(*parts):
     return os.path.join(get_package_share_directory('fm_control'), *parts)
 
 
-def robot_description():
-    """Return the OpenArm URDF the SRDF is written for."""
-    path = share_file('urdf', 'openarm.sim.urdf.xacro')
-    return xacro.process_file(path, mappings=DESCRIPTION_ARGS).toxml()
+def robot_description(names='openarm'):
+    """Return the OpenArm URDF the ``names`` SRDF is written for."""
+    path = share_file('urdf', NAMES[names]['xacro'])
+    return xacro.process_file(path, mappings=NAMES[names]['xacro_args']).toxml()
 
 
-def checked_description(passed):
+def checked_description(passed, names='openarm'):
     """Return ``passed``, or the local build when empty; fail if it lacks the chain."""
-    description = passed or robot_description()
+    description = passed or robot_description(names)
     links = {link.get('name') for link in ET.fromstring(description).findall('link')}
-    missing = [link for link in CHAIN_LINKS if link not in links]
+    missing = [link for link in NAMES[names]['chain'] if link not in links]
     if missing:
+        build = [NAMES[names]['xacro']]
+        build += [f'{key}:={value}' for key, value in NAMES[names]['xacro_args'].items()]
         raise ValueError(
-            f'robot_description lacks {", ".join(missing)}, which openarm.srdf needs '
-            '(build it with robot_preset:=default_bimanual emit_grasp_frame:=true)'
+            f'robot_description lacks {", ".join(missing)}, which '
+            f'{NAMES[names]["srdf"]} needs (build it from {" ".join(build)})'
         )
     return description
 
@@ -153,10 +180,13 @@ def _launch_setup(context):
         raise ValueError(
             f'command_type must be one of: {", ".join(COMMAND_TYPES)}; got {command_type!r}'
         )
+    names = LaunchConfiguration('names').perform(context)
+    if names not in NAMES:
+        raise ValueError(f'names must be one of: {", ".join(NAMES)}; got {names!r}')
     description = checked_description(
-        LaunchConfiguration('robot_description').perform(context)
+        LaunchConfiguration('robot_description').perform(context), names
     )
-    with open(share_file('config', 'openarm', 'openarm.srdf')) as handle:
+    with open(share_file('config', 'openarm', NAMES[names]['srdf'])) as handle:
         semantic = handle.read()
     with open(share_file('config', 'openarm', 'kinematics.yaml')) as handle:
         kinematics = yaml.safe_load(handle)
@@ -178,6 +208,7 @@ def _launch_setup(context):
                 'robot_description_semantic': semantic,
                 'robot_description_kinematics': kinematics,
                 'use_sim_time': True,
+                'moveit_servo': {'command_out_topic': NAMES[names]['command_out_topic']},
             },
         ],
     )
@@ -196,9 +227,12 @@ def generate_launch_description():
                 description='Command Servo accepts: joint_jog or twist.',
             ),
             DeclareLaunchArgument(
+                'names', default_value='openarm',
+                description="The arm's names: openarm (openarm_*) or loader (follower_*).",
+            ),
+            DeclareLaunchArgument(
                 'robot_description', default_value='',
-                description='URDF for Servo; empty builds default_bimanual with the '
-                'grasp frame from openarm.sim.urdf.xacro.',
+                description="URDF for Servo; empty builds it from the names' xacro.",
             ),
             OpaqueFunction(function=_launch_setup),
         ]
