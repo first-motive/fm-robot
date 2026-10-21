@@ -18,18 +18,26 @@ Check the sim OpenArm Servo config against the URDF and moveit_servo, and the la
 Runs against the installed share and the installed launch file, so a renamed link,
 a group that no longer resolves, a parameter moveit_servo does not declare, or a
 dropped launch action fails here instead of leaving Servo idle at run time.
+
+The launch serves the arm under two sets of names. Most tests cover the default
+``openarm_*`` names; the ``loader`` tests at the end check ``follower_*`` against
+openarm_loader.sim.urdf.xacro around a stand-in for its private description, and
+against the real description where it is installed.
 """
 
 import importlib.util
 import os
 import xml.etree.ElementTree as ET
 
-from ament_index_python.packages import get_package_share_directory
+from ament_index_python.packages import get_package_share_directory, PackageNotFoundError
 from launch import LaunchContext
 from launch.actions import ExecuteProcess, RegisterEventHandler, Shutdown
 from launch.utilities import perform_substitutions
 from launch_ros.actions import Node
 import pytest
+# The stand-in for the loader's private description; pytest puts this directory on the path.
+from test_openarm_loader_xacro import _stand_in_urdf
+import xacro
 import yaml
 
 # The fm_openarm_v2 robot profile's base frame, right ee_frame, joints and trajectory
@@ -38,6 +46,12 @@ PROFILE_BASE_FRAME = 'openarm_body_link0'
 PROFILE_RIGHT_EE_FRAME = 'openarm_right_grasp_frame'
 RIGHT_ARM_JOINTS = [f'openarm_right_joint{i}' for i in range(1, 8)]
 RIGHT_TRAJECTORY_TOPIC = '/openarm_right_arm_controller/joint_trajectory'
+# The same for the loader_openarm_v2 robot profile, as fm-sim's openarm entry runs it.
+LOADER_BASE_FRAME = 'follower_body_link0'
+LOADER_RIGHT_TCP = 'follower_r_hand_tcp'
+LOADER_RIGHT_ARM_JOINTS = [f'follower_r_joint{i}' for i in range(1, 8)]
+LOADER_RIGHT_TRAJECTORY_TOPIC = '/follower_r_jtc/joint_trajectory'
+LOADER_DESCRIPTION = 'openarm_v2_anvil_description'
 
 
 def _share(package, *parts):
@@ -110,7 +124,8 @@ def test_right_arm_chain_spans_profile_frames(urdf, srdf):
 
 def test_servo_targets_right_arm(servo_params):
     assert servo_params['move_group_name'] == 'right_arm'
-    assert servo_params['command_out_topic'] == RIGHT_TRAJECTORY_TOPIC
+    # The launch sets it for the arm's names; a value here would be overridden.
+    assert 'command_out_topic' not in servo_params
     assert servo_params['joint_command_in_topic'] == '~/delta_joint_cmds'
     assert servo_params['check_collisions'] is False
     assert len(servo_params['joint_limit_margins']) == len(RIGHT_ARM_JOINTS)
@@ -149,7 +164,10 @@ def host_local(monkeypatch):
 
 def _setup(launch_module, **arguments):
     context = LaunchContext()
-    defaults = {'sim_only': 'true', 'command_type': 'joint_jog', 'robot_description': ''}
+    defaults = {
+        'sim_only': 'true', 'command_type': 'joint_jog', 'names': 'openarm',
+        'robot_description': '',
+    }
     for name, value in {**defaults, **arguments}.items():
         context.launch_configurations[name] = value
     return context, launch_module._launch_setup(context)
@@ -189,6 +207,7 @@ def test_launch_starts_servo_node_on_sim_time(launch_module, srdf):
         'name'
     )
     assert PROFILE_RIGHT_EE_FRAME in params['robot_description']
+    assert params['moveit_servo.command_out_topic'] == RIGHT_TRAJECTORY_TOPIC
     # launch_ros flattens dict parameters into dotted names.
     assert params['robot_description_kinematics.right_arm.kinematics_solver'] == (
         'kdl_kinematics_plugin/KDLKinematicsPlugin'
@@ -272,3 +291,76 @@ def test_launch_accepts_localhost_only(launch_module, monkeypatch):
     monkeypatch.delenv('ROS_AUTOMATIC_DISCOVERY_RANGE')
     monkeypatch.setenv('ROS_LOCALHOST_ONLY', '1')
     _servo_node(_setup(launch_module)[1])
+
+
+def test_launch_rejects_unknown_names(launch_module):
+    with pytest.raises(ValueError, match='names must be one of'):
+        _setup(launch_module, names='follower')
+
+
+# The loader's names. The description is private, so these process the wrapper xacro
+# around test_openarm_loader_xacro's stand-in, which carries the loader's links and
+# joints.
+
+
+@pytest.fixture(scope='module')
+def loader_urdf_text(tmp_path_factory):
+    stand_in = tmp_path_factory.mktemp('loader_stand_in') / 'robot.urdf'
+    stand_in.write_text(_stand_in_urdf())
+    path = _share('fm_control', 'urdf', 'openarm_loader.sim.urdf.xacro')
+    return xacro.process_file(path, mappings={'description': str(stand_in)}).toxml()
+
+
+@pytest.fixture(scope='module')
+def loader_srdf():
+    return ET.parse(_share('fm_control', 'config', 'openarm', 'openarm_loader.srdf')).getroot()
+
+
+def _check_loader_chain(urdf, srdf):
+    assert srdf.get('name') == urdf.get('name')
+    assert [group.get('name') for group in srdf.findall('group')] == ['right_arm']
+    chain = srdf.find("group[@name='right_arm']/chain")
+    assert chain.get('base_link') == LOADER_BASE_FRAME
+    assert chain.get('tip_link') == LOADER_RIGHT_TCP
+    # Servo jogs exactly the joints follower_r_jtc claims.
+    assert _chain_active_joints(urdf, LOADER_BASE_FRAME, LOADER_RIGHT_TCP) == (
+        LOADER_RIGHT_ARM_JOINTS
+    )
+
+
+def test_loader_right_arm_chain_spans_profile_frames(loader_urdf_text, loader_srdf):
+    _check_loader_chain(ET.fromstring(loader_urdf_text), loader_srdf)
+
+
+def test_kinematics_covers_the_loader_group(loader_srdf):
+    with open(_share('fm_control', 'config', 'openarm', 'kinematics.yaml')) as handle:
+        kinematics = yaml.safe_load(handle)
+    assert set(kinematics) == {group.get('name') for group in loader_srdf.findall('group')}
+
+
+def test_loader_launch_streams_to_follower_r_jtc(launch_module, loader_urdf_text, loader_srdf):
+    context, actions = _setup(launch_module, names='loader', robot_description=loader_urdf_text)
+    params = _node_parameters(_servo_node(actions), context)
+    assert params['robot_description'] == loader_urdf_text
+    assert ET.fromstring(params['robot_description_semantic']).get('name') == (
+        loader_srdf.get('name')
+    )
+    assert params['moveit_servo.command_out_topic'] == LOADER_RIGHT_TRAJECTORY_TOPIC
+    assert params['moveit_servo']['move_group_name'] == 'right_arm'
+    assert params['use_sim_time'] is True
+
+
+def test_loader_launch_rejects_openarm_description(launch_module):
+    with pytest.raises(ValueError, match=LOADER_RIGHT_TCP):
+        _setup(launch_module, names='loader',
+               robot_description=launch_module.robot_description())
+
+
+def test_loader_launch_builds_the_real_description(launch_module, loader_srdf):
+    try:
+        get_package_share_directory(LOADER_DESCRIPTION)
+    except PackageNotFoundError:
+        pytest.skip(f'{LOADER_DESCRIPTION} is private and not installed here')
+    context, actions = _setup(launch_module, names='loader')
+    params = _node_parameters(_servo_node(actions), context)
+    _check_loader_chain(ET.fromstring(params['robot_description']), loader_srdf)

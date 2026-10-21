@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+MoveIt semantics for the OpenArm right arm in anvil-loader's names, for the sim-only
+Servo (launch/openarm_sim_servo.launch.py names:=loader).
+
+Pairs with openarm_loader.sim.urdf.xacro around the openarm_v2_anvil_description URDF.
+The right_arm group is a chain from the body to the right hand's TCP, so MoveIt's IK
+base (Servo's planning frame) is follower_body_link0 and the chain tip (Servo's end
+effector) is follower_r_hand_tcp, the loader_openarm_v2 profile's base and right TCP.
+Only the seven revolute arm joints are active in the chain; the fixed mount, hand and
+TCP joints add no DOF.
+
+There is no collision matrix, so this SRDF is not fit for a real arm: servo_sim.yaml
+runs with collision checking off.
+-->
+<!-- Robot name matches openarm_loader.sim.urdf.xacro; MoveIt rejects a mismatched pair. -->
+<robot name="openarm">
+    <group name="right_arm">
+        <chain base_link="follower_body_link0" tip_link="follower_r_hand_tcp"/>
+    </group>
+</robot>

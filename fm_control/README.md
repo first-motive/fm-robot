@@ -47,7 +47,8 @@ src/
   pose_tracking_node.cpp  vision mirror: MoveIt Servo PoseTracking host (Humble only;
                           Jazzy's moveit_servo dropped PoseTracking, so it is not built)
 include/fm_control/       pure command-building logic for the two bridge nodes
-config/openarm/           OpenArm SRDF, KDL kinematics and sim Servo parameters
+config/openarm/           OpenArm SRDFs (both sets of names), KDL kinematics and sim
+                          Servo parameters
 launch/
   openarm_sim_servo.launch.py  OpenArm right-arm MoveIt Servo (Jazzy, sim only)
 test/                     gtest for the bridge logic; pytest for the OpenArm xacro
@@ -194,11 +195,11 @@ build-checked, and unit-tested, but **untested on hardware** — none on hand ye
 `launch/openarm_sim_servo.launch.py` starts `/servo_node` for a simulated OpenArm
 right arm, so JointJog on `/servo_node/delta_joint_cmds` (the fm-teleop `arm_joint`
 channel) or TwistStamped on `/servo_node/delta_twist_cmds` drives the arm through
-`/openarm_right_arm_controller/joint_trajectory`.
+`/openarm_right_arm_controller/joint_trajectory`, or, under the loader's names,
+through `/follower_r_jtc/joint_trajectory`.
 
-**Sim only.** Collision checking is off and `config/openarm/openarm.srdf` has no
-collision matrix; the launch logs a warning saying so. Never run it against a real
-arm. A real-arm Servo needs its own reviewed profile: a collision matrix with
+**Sim only.** Collision checking is off and neither SRDF has a collision matrix; the
+launch logs a warning saying so. Never run it against a real arm. A real-arm Servo needs its own reviewed profile: a collision matrix with
 collision checking on, and DDS domain isolation.
 
 ```bash
@@ -210,7 +211,8 @@ ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST \
 |----------|--------|--------|
 | `sim_only` | must be `true` (default `false`) | refuses to start otherwise |
 | `command_type` | `joint_jog` (default), `twist` | calls `~/switch_command_type`; the launch shuts down if Servo rejects it |
-| `robot_description` | URDF string, default empty | empty builds the URDF locally; a passed one must contain `openarm_body_link0` and `openarm_right_grasp_frame` |
+| `names` | `openarm` (default), `loader` | the arm's names: picks the SRDF, the local URDF and the trajectory controller (table below) |
+| `robot_description` | URDF string, default empty | empty builds the URDF locally; a passed one must contain the names' chain links |
 
 Servo always runs on sim time (`use_sim_time: true`). The local URDF is
 `default_bimanual` with `emit_grasp_frame:=true` and the default loader hand, the
@@ -219,6 +221,17 @@ model the SRDF names; the pinch hand gives the same chain. Its
 `openarm_right_grasp_frame`, so Servo's planning frame and end effector are the
 `fm_openarm_v2` profile's `base_frame` and right `ee_frame`. The running robot must
 publish that URDF's joints on `/joint_states`; verified against the `mock` backend.
+
+Under `names:=loader` the arm is `openarm_loader.sim.urdf.xacro`'s, in anvil-loader's
+names, and `config/openarm/openarm_loader.srdf` describes it. The local build needs the
+private description that xacro includes, so fm-sim passes the run's URDF instead.
+Both sets of names share `kinematics.yaml` and `servo_sim.yaml`; the launch sets
+`command_out_topic`. Verified against the `mock` backend with the real description.
+
+| `names` | SRDF | `right_arm` chain | Streams to |
+|---------|------|-------------------|------------|
+| `openarm` | `openarm.srdf` | `openarm_body_link0` to `openarm_right_grasp_frame` | `/openarm_right_arm_controller/joint_trajectory` |
+| `loader` | `openarm_loader.srdf` | `follower_body_link0` to `follower_r_hand_tcp` | `/follower_r_jtc/joint_trajectory` |
 
 The launch refuses to start, with an error naming the cause, unless both guards hold:
 

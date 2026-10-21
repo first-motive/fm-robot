@@ -1,14 +1,16 @@
 # MoveIt Servo (Jazzy moveit_servo 2.12) for the OpenArm right arm IN SIMULATION ONLY.
 #
-# Never point this at a real arm: collision checking is off and openarm.srdf has no
+# Never point this at a real arm: collision checking is off and neither SRDF has a
 # collision matrix. A real-arm Servo needs its own reviewed profile (collision matrix,
 # collision checking on, DDS domain isolation).
 #
 # Servo reads /joint_states, turns JointJog or TwistStamped commands on its
 # ~/delta_*_cmds topics into a streamed JointTrajectory, and publishes it to the
-# right arm's joint_trajectory_controller. Planning frame and end effector are not
-# parameters on Jazzy: they come from the right_arm chain in openarm.srdf
-# (openarm_body_link0 -> openarm_right_grasp_frame).
+# right arm's joint_trajectory_controller. That controller's topic
+# (command_out_topic) is set by the launch for the arm's names. Planning frame and end
+# effector are not parameters on Jazzy: they come from the right_arm chain in the
+# SRDF (openarm.srdf: openarm_body_link0 -> openarm_right_grasp_frame;
+# openarm_loader.srdf: follower_body_link0 -> follower_r_hand_tcp).
 #
 # Ported from fm_ros2 fm_bringup config/openarm/servo.yaml (Humble). Dropped there and
 # absent here: use_gazebo, low_latency_mode, planning_frame, ee_frame_name,
@@ -45,9 +47,8 @@ servo_node:
       status_topic: ~/status
       cartesian_command_in_topic: ~/delta_twist_cmds
       joint_command_in_topic: ~/delta_joint_cmds
-      command_out_topic: /openarm_right_arm_controller/joint_trajectory
 
-      # Off: openarm.srdf has no collision matrix, so adjacent links would read as a
+      # Off: the SRDF has no collision matrix, so adjacent links would read as a
       # permanent near-collision and halt every command. The launch warns about it.
       check_collisions: false
 
