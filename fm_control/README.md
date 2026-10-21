@@ -36,6 +36,7 @@ publishes `/joint_states`, and emits the odom → base_link transform on `/tf`.
 ```
 urdf/
   openarm.sim.urdf.xacro / openarm.ros2_control.xacro   OpenArm (7-DOF, preset-driven)
+  openarm_loader.sim.urdf.xacro                         OpenArm in the loader's names, around an external description
   so101.sim.urdf.xacro   / so101.ros2_control.xacro     SO101 (5-DOF arm + gripper)
   g1.sim.urdf.xacro      / g1.ros2_control.xacro        G1-D right arm (7-DOF)
   axol.sim.urdf.xacro    / axol.ros2_control.xacro      Axol bimanual (two 7-DOF arms, 14 joints)
@@ -119,6 +120,22 @@ keep at least 40 mm clear, fingers open or closed.
 
 The OpenArm description also carries the chest and right wrist camera frames from
 `fm_description/urdf/openarm_cameras.xacro`, on whichever links the preset enables.
+
+### OpenArm In The Loader's Names
+
+`openarm_loader.sim.urdf.xacro` runs the OpenArm as the real robot names it
+(`follower_l_*`, `follower_r_*`, the `loader_openarm_v2` robot profile). fm-robot holds
+no geometry for it: `description:=` names a flat URDF in those names, by default
+fm-skills' `openarm_v2_anvil_description`, which is private and found only where it is
+installed. The wrapper adds the same ros2_control systems as above (no `real`
+backend: on the robot the loader owns the hardware), the mirrored bimanual ready pose,
+and the profile's camera frames `cam_chest_optical` and `cam_wrist_r_optical` on the
+description's `chest_cam` and `right_wrist_cam`.
+
+```bash
+xacro $(ros2 pkg prefix fm_control)/share/fm_control/urdf/openarm_loader.sim.urdf.xacro \
+  sim_backend:=mujoco mujoco_model:=/path/to/openarm.xml
+```
 
 ## How It Is Built
 

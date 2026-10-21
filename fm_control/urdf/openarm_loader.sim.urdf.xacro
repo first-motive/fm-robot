@@ -1,0 +1,89 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+The OpenArm v2 under anvil-loader's names, with a backend-selectable ros2_control System.
+
+fm-robot holds no geometry for it. The description is a flat URDF in the loader's names
+(follower_l_*, follower_r_*, follower_body_link0), included from another package:
+fm-skills' openarm_v2_anvil_description by default, which is private and so is found only
+where it is installed. This file adds what a sim run needs on top, and nothing else:
+
+  - one ros2_control system over both arms (mujoco, gazebo) or one per arm (mock, isaac),
+    with the loader's joint names, spawning in the bimanual ready pose
+  - cam_chest_optical and cam_wrist_r_optical, the camera frames the loader_openarm_v2
+    robot profile names, at the description's own chest_cam and right_wrist_cam
+
+There is no real backend: on the robot the loader owns the hardware.
+
+Args:
+  description    path of the description URDF (default: robot.urdf in
+                 openarm_v2_anvil_description, looked up only when this is not given)
+  sim_backend    mock | mujoco | gz | gazebo | isaac
+-->
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="openarm">
+
+  <xacro:arg name="description" default="$(find openarm_v2_anvil_description)/urdf/robot.urdf"/>
+  <xacro:arg name="sim_backend" default="mock"/>
+  <xacro:include filename="$(find fm_control)/urdf/sim_backend.xacro"/>
+  <xacro:fm_sim_backend
+      requested="$(arg sim_backend)"
+      supported="${['mock', 'mujoco', 'gazebo', 'isaac']}"/>
+  <xacro:arg name="isaac_joint_commands_topic" default="/isaac_joint_commands"/>
+  <xacro:arg name="isaac_joint_states_topic" default="/isaac_joint_states"/>
+  <!-- As in openarm.sim.urdf.xacro: fm_sim_models owns the MJCF path, and the Gazebo
+       plugin loads the controllers file into its embedded controller_manager. -->
+  <xacro:arg name="mujoco_model" default=""/>
+  <xacro:property name="mujoco_model_path" value="$(arg mujoco_model)"/>
+  <xacro:arg name="gazebo_controllers_file" default=""/>
+
+  <xacro:include filename="$(arg description)"/>
+  <xacro:include filename="$(find fm_control)/urdf/openarm.ros2_control.xacro"/>
+
+  <!-- openarm.sim.urdf.xacro's loader-hand bimanual ready pose (ready_bimanual_loader;
+       move both together), right arm first. The left arm mirrors it: every joint but the
+       elbow (joint4) negated, as the loader's left-arm limits are the right's mirrored.
+       Both arms carry the loader hand, so each system also gets finger_joint1. -->
+  <xacro:property name="ready_right" value="${[0.6816, 0.13, -0.3161, 1.1622, 0.0, 0.3, 0.0]}"/>
+  <xacro:property name="arm_specs"
+      value="${[dict(prefix='follower_l_', hand=True,
+                     ready=[ready_right[i] * (1 if i == 3 else -1) for i in python.range(7)]),
+                dict(prefix='follower_r_', hand=True, ready=ready_right)]}"/>
+
+  <xacro:if value="${backend in ['mujoco', 'gazebo']}">
+    <xacro:openarm_single_system arm_specs="${arm_specs}" sim_backend="${backend}"/>
+  </xacro:if>
+  <!-- Gains and CAN settings feed only the real backend, which this file refuses. -->
+  <xacro:unless value="${backend in ['mujoco', 'gazebo']}">
+    <xacro:openarm_emit_arm_systems
+        arm_specs="${arm_specs}"
+        index="0"
+        sim_backend="${backend}"
+        control_gains="${dict()}"
+        can_interface=""
+        can_fd="false"
+        isaac_joint_commands_topic="$(arg isaac_joint_commands_topic)"
+        isaac_joint_states_topic="$(arg isaac_joint_states_topic)"/>
+  </xacro:unless>
+
+  <!-- The description's camera links are already optical frames (z forward, x right,
+       y down), so the profile's names sit on them unmoved. -->
+  <link name="cam_chest_optical"/>
+  <joint name="cam_chest_optical_joint" type="fixed">
+    <parent link="chest_cam"/>
+    <child link="cam_chest_optical"/>
+  </joint>
+  <link name="cam_wrist_r_optical"/>
+  <joint name="cam_wrist_r_optical_joint" type="fixed">
+    <parent link="right_wrist_cam"/>
+    <child link="cam_wrist_r_optical"/>
+  </joint>
+
+  <xacro:if value="${backend == 'gazebo'}">
+    <gazebo>
+      <plugin filename="gz_ros2_control-system"
+              name="gz_ros2_control::GazeboSimROS2ControlPlugin">
+        <parameters>$(arg gazebo_controllers_file)</parameters>
+      </plugin>
+    </gazebo>
+  </xacro:if>
+
+</robot>
