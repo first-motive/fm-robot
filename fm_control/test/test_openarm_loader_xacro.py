@@ -105,11 +105,22 @@ def test_the_real_backend_is_refused(stand_in):
         _process(description=str(stand_in), sim_backend='real')
 
 
-@pytest.mark.parametrize('backend', ['mujoco', 'gazebo'])
-def test_simulators_get_one_system_over_both_arms(stand_in, backend):
-    robot = _process(description=str(stand_in), sim_backend=backend)
+def test_mujoco_gets_one_system_over_both_arms(stand_in):
+    robot = _process(description=str(stand_in), sim_backend='mujoco')
     both_arms = _arm_joints('follower_l_') + _arm_joints('follower_r_')
     assert _system_joints(robot) == {'openarm_system': both_arms}
+
+
+def test_gazebo_gets_one_system_with_the_mimic_fingers(stand_in):
+    robot = _process(description=str(stand_in), sim_backend='gazebo')
+    both_arms = [joint for side in SIDES
+                 for joint in _arm_joints(side) + [f'{side}finger_joint2']]
+    assert _system_joints(robot) == {'openarm_system': both_arms}
+    # ros2_control refuses a mimic joint with a command interface.
+    for side in SIDES:
+        mimic = robot.find(f"ros2_control/joint[@name='{side}finger_joint2']")
+        assert [i.get('name') for i in mimic.findall('state_interface')] == ['position']
+        assert mimic.findall('command_interface') == []
 
 
 @pytest.mark.parametrize('backend', ['mock', 'isaac'])

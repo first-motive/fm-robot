@@ -74,10 +74,13 @@ def test_simulators_load_one_system_for_both_arms(backend):
     systems = _systems(_process(robot_preset='default_bimanual', sim_backend=backend))
     assert list(systems) == ['openarm_system']
     joints = systems['openarm_system']
-    assert len(joints) == len(set(joints)) == 16
+    # Gazebo also lists each finger_joint2, the mimic gz_ros2_control drives.
+    mimic = backend in ('gz', 'gazebo')
+    assert len(joints) == len(set(joints)) == (18 if mimic else 16)
     for side in ('left', 'right'):
         assert {f'openarm_{side}_joint{i}' for i in range(1, 8)} <= set(joints)
         assert f'openarm_{side}_finger_joint1' in joints
+        assert (f'openarm_{side}_finger_joint2' in joints) == mimic
 
 
 @pytest.mark.parametrize('backend', ['mock', 'isaac', 'real'])
@@ -88,12 +91,14 @@ def test_other_backends_keep_one_system_per_arm(backend):
 
 
 def _initial_values(robot):
+    # A mimic joint carries no initial value: it follows the joint it mimics.
     return {
         joint.get('name'): {
             state.get('name'): float(state.find("param[@name='initial_value']").text)
             for state in joint.findall('state_interface')
         }
         for joint in robot.findall('ros2_control/joint')
+        if joint.find("state_interface/param[@name='initial_value']") is not None
     }
 
 

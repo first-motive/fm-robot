@@ -5,8 +5,8 @@ First Motive backend-selectable ros2_control for the OpenArm.
 One <ros2_control> system per enabled arm, except under mujoco and gazebo, which
 get a single system for every arm (openarm_single_system).
 The controllers, controller_manager, and the command/state interface set stay
-identical across every backend — only the <hardware> System plugin swaps, selected
-by the `sim_backend` arg:
+identical across every backend, except gazebo's extra finger_joint2 state (below) —
+only the <hardware> System plugin swaps, selected by the `sim_backend` arg:
 
   mock    -> mock_components/GenericSystem        (no sim; perfect state echo)
   mujoco  -> mujoco_ros2_control/MujocoSystemInterface  (Mac daily driver, CPU)
@@ -16,7 +16,9 @@ by the `sim_backend` arg:
 
 Joint names mirror openarm_description geometry exactly: <prefix>joint1..7, plus
 <prefix>finger_joint1 when the arm carries a gripper. `prefix` is the preset's full
-arm prefix, e.g. openarm_right_.
+arm prefix, e.g. openarm_right_. Under gazebo the system also lists
+<prefix>finger_joint2, state only, so gz_ros2_control drives it as the mimic of
+finger_joint1; DART has no mimic constraint and the finger would not move.
 -->
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro">
 
@@ -108,9 +110,10 @@ arm prefix, e.g. openarm_right_.
 
   <!-- One arm's joints: 7 arm joints, plus finger_joint1 when it carries a gripper.
        Shared by the per-arm systems and the single system, so both emit the same
-       interfaces and spawn pose. -->
+       interfaces and spawn pose. mimic_finger adds finger_joint2 with no command
+       interface, which ros2_control reads as the URDF <mimic> of finger_joint1. -->
   <xacro:macro name="openarm_arm_joints"
-      params="prefix hand init1 init2 init3 init4 init5 init6 init7">
+      params="prefix hand init1 init2 init3 init4 init5 init6 init7 mimic_finger:=false">
     <!-- Spawn in a bent "ready" pose, NOT all-zeros. joint4 (elbow) has lower limit
          = 0, so a zeros spawn sits AT the joint limit AND fully extended (a kinematic
          singularity) — MoveIt Servo then emergency-stops every cycle and refuses to
@@ -137,6 +140,11 @@ arm prefix, e.g. openarm_right_.
 
     <xacro:if value="${hand}">
       <xacro:openarm_joint joint_name="${prefix}finger_joint1"/>
+      <xacro:if value="${mimic_finger}">
+        <joint name="${prefix}finger_joint2">
+          <state_interface name="position"/>
+        </joint>
+      </xacro:if>
     </xacro:if>
   </xacro:macro>
 
@@ -198,7 +206,7 @@ arm prefix, e.g. openarm_right_.
 
   <!-- Recurse over the arm specs, emitting each arm's joints into the system the
        caller has open. -->
-  <xacro:macro name="openarm_emit_arm_joints" params="arm_specs index">
+  <xacro:macro name="openarm_emit_arm_joints" params="arm_specs index mimic_finger:=false">
     <xacro:if value="${index &lt; len(arm_specs)}">
       <xacro:property name="spec" value="${arm_specs[index]}" lazy_eval="false"/>
       <xacro:openarm_arm_joints
@@ -206,8 +214,10 @@ arm prefix, e.g. openarm_right_.
           hand="${spec['hand']}"
           init1="${spec['ready'][0]}" init2="${spec['ready'][1]}" init3="${spec['ready'][2]}"
           init4="${spec['ready'][3]}" init5="${spec['ready'][4]}" init6="${spec['ready'][5]}"
-          init7="${spec['ready'][6]}"/>
-      <xacro:openarm_emit_arm_joints arm_specs="${arm_specs}" index="${index + 1}"/>
+          init7="${spec['ready'][6]}"
+          mimic_finger="${mimic_finger}"/>
+      <xacro:openarm_emit_arm_joints
+          arm_specs="${arm_specs}" index="${index + 1}" mimic_finger="${mimic_finger}"/>
     </xacro:if>
   </xacro:macro>
 
@@ -215,7 +225,9 @@ arm prefix, e.g. openarm_right_.
        Each MujocoSystemInterface loads its own copy of the MJCF, so per-arm systems
        would step the arms in separate worlds where they cannot touch each other or
        the scene; gz_ros2_control stalls at "Waiting RM to load and initialize
-       hardware" with two GazeboSimSystem systems and comes up with one. -->
+       hardware" with two GazeboSimSystem systems and comes up with one. MuJoCo
+       couples the fingers with an equality in the MJCF; Gazebo needs the mimic
+       joint listed here. -->
   <xacro:macro name="openarm_single_system" params="arm_specs sim_backend">
     <ros2_control name="openarm_system" type="system">
       <!-- Placeholder prefix, gains, CAN and isaac topics: the mujoco and gazebo
@@ -228,7 +240,8 @@ arm prefix, e.g. openarm_right_.
           can_fd="false"
           isaac_joint_commands_topic=""
           isaac_joint_states_topic="" />
-      <xacro:openarm_emit_arm_joints arm_specs="${arm_specs}" index="0"/>
+      <xacro:openarm_emit_arm_joints
+          arm_specs="${arm_specs}" index="0" mimic_finger="${sim_backend == 'gazebo'}"/>
     </ros2_control>
   </xacro:macro>
 

@@ -434,7 +434,9 @@ def test_no_pinch_gripper_links(loader):
     assert not {name for name in links if '_ee_link' in name}
 
 
-def test_ros2_control_drives_finger_joint1(loader):
+def test_ros2_control_drives_finger_joint1_without_a_gazebo_mimic(loader):
+    # The default backend; gazebo adds each finger_joint2 as a mimic
+    # (test_openarm_loader_xacro).
     joints = {j.get('name') for j in loader.findall('ros2_control/joint')}
     assert {'openarm_left_finger_joint1', 'openarm_right_finger_joint1'} <= joints
     assert not {name for name in joints if name.endswith('finger_joint2')}
