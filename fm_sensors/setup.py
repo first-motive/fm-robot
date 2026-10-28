@@ -17,6 +17,7 @@ setup(
     maintainer_email="nish@ubundi.co.za",
     description="First Motive multi-sensor capture layer: camera publisher (image_raw + camera_info)",
     license="Apache-2.0",
+    extras_require={"test": ["pytest"]},
     entry_points={
         "console_scripts": [
             "sensor_node = fm_sensors.sensor_node:main",
