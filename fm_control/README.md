@@ -213,6 +213,7 @@ ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST \
 | `command_type` | `joint_jog` (default), `twist` | calls `~/switch_command_type`; the launch shuts down if Servo rejects it |
 | `names` | `openarm` (default), `loader` | the arm's names: picks the SRDF, the local URDF and the trajectory controller (table below) |
 | `robot_description` | URDF string, default empty | empty builds the URDF locally; a passed one must contain the names' chain links |
+| `params_file` | path to a ROS params file, default empty | applied after `servo_sim.yaml`, so its values win there; the description, command topic and sim time the launch sets still win over it |
 
 Servo always runs on sim time (`use_sim_time: true`). The local URDF is
 `default_bimanual` with `emit_grasp_frame:=true` and the default loader hand, the

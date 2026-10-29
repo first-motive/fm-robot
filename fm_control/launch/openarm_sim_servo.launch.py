@@ -38,6 +38,9 @@ xacro and trajectory controller (see ``NAMES``): ``openarm`` is fm_control's
     robot_description  URDF Servo plans with (default: built here from the names'
                        xacro, the model their SRDF names). A passed URDF must carry
                        the right_arm chain links.
+    params_file        ROS params file applied after servo_sim.yaml, so its values
+                       win there; the description, command topic and sim time the
+                       launch sets still win over it (default empty: none)
 
 Servo's topics are reachable by anything on the same DDS domain, so the launch
 refuses to start unless discovery is host-local: ``ROS_AUTOMATIC_DISCOVERY_RANGE=
@@ -45,6 +48,7 @@ LOCALHOST`` (what the fm-sim agent sets on every run) or ``ROS_LOCALHOST_ONLY=1`
 """
 
 import os
+import tempfile
 import xml.etree.ElementTree as ET
 
 from ament_index_python.packages import get_package_share_directory
@@ -167,6 +171,17 @@ def _select_command_type(value):
     ]
 
 
+def _guard_file(values):
+    """Write ``values`` as a params file keyed by Servo's own name."""
+    # Not a dict: launch_ros files a dict under /**, and rcl applies a node-keyed
+    # entry (as in a run's params_file) after /** whatever the file order.
+    with tempfile.NamedTemporaryFile(
+        'w', prefix=f'{SERVO_NODE}_guard_', suffix='.yaml', delete=False
+    ) as handle:
+        yaml.safe_dump({f'/{SERVO_NODE}': {'ros__parameters': values}}, handle)
+    return handle.name
+
+
 def _launch_setup(context):
     sim_only = LaunchConfiguration('sim_only').perform(context)
     if sim_only != 'true':
@@ -191,6 +206,19 @@ def _launch_setup(context):
     with open(share_file('config', 'openarm', 'kinematics.yaml')) as handle:
         kinematics = yaml.safe_load(handle)
 
+    owned = {
+        'robot_description': description,
+        'robot_description_semantic': semantic,
+        'robot_description_kinematics': kinematics,
+        'use_sim_time': True,
+        'moveit_servo': {'command_out_topic': NAMES[names]['command_out_topic']},
+    }
+    # ROS applies parameter files in order and the last wins, so params_file beats
+    # servo_sim.yaml; the guard file after it keeps the launch's own keys out of an
+    # override's reach.
+    params_file = LaunchConfiguration('params_file').perform(context)
+    overrides = [params_file, _guard_file(owned)] if params_file else []
+
     _logger.warning(
         'OpenArm Servo is SIM ONLY: collision checking is off. Never run it against a '
         'real arm.'
@@ -203,13 +231,8 @@ def _launch_setup(context):
         output='screen',
         parameters=[
             share_file('config', 'openarm', 'servo_sim.yaml'),
-            {
-                'robot_description': description,
-                'robot_description_semantic': semantic,
-                'robot_description_kinematics': kinematics,
-                'use_sim_time': True,
-                'moveit_servo': {'command_out_topic': NAMES[names]['command_out_topic']},
-            },
+            owned,
+            *overrides,
         ],
     )
     return [servo, *_select_command_type(COMMAND_TYPES[command_type])]
@@ -233,6 +256,11 @@ def generate_launch_description():
             DeclareLaunchArgument(
                 'robot_description', default_value='',
                 description="URDF for Servo; empty builds it from the names' xacro.",
+            ),
+            DeclareLaunchArgument(
+                'params_file', default_value='',
+                description='Optional ROS params file appended last to the servo node, so '
+                'its values win.',
             ),
             OpaqueFunction(function=_launch_setup),
         ]
