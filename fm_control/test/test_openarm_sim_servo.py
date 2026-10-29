@@ -35,6 +35,7 @@ from launch.actions import ExecuteProcess, RegisterEventHandler, Shutdown
 from launch.utilities import perform_substitutions
 from launch_ros.actions import Node
 import pytest
+import rclpy
 # The stand-in for the loader's private description; pytest puts this directory on the path.
 from test_openarm_loader_xacro import _stand_in_urdf
 import xacro
@@ -52,6 +53,7 @@ LOADER_RIGHT_TCP = 'follower_r_hand_tcp'
 LOADER_RIGHT_ARM_JOINTS = [f'follower_r_joint{i}' for i in range(1, 8)]
 LOADER_RIGHT_TRAJECTORY_TOPIC = '/follower_r_jtc/joint_trajectory'
 LOADER_DESCRIPTION = 'openarm_v2_anvil_description'
+SERVO_NODE = 'servo_node'
 
 
 def _share(package, *parts):
@@ -166,7 +168,7 @@ def _setup(launch_module, **arguments):
     context = LaunchContext()
     defaults = {
         'sim_only': 'true', 'command_type': 'joint_jog', 'names': 'openarm',
-        'robot_description': '',
+        'robot_description': '', 'params_file': '',
     }
     for name, value in {**defaults, **arguments}.items():
         context.launch_configurations[name] = value
@@ -220,6 +222,67 @@ def test_launch_passes_given_description(launch_module):
     assert 'data-from="caller"' in given
     context, actions = _setup(launch_module, robot_description=given)
     assert _node_parameters(_servo_node(actions), context)['robot_description'] == given
+
+
+def _resolved(node, context, keys):
+    """Return what rcl resolves ``keys`` to for a node started with servo_node's files."""
+    node._perform_substitutions(context)
+    cli_args = ['--ros-args']
+    for path, _ in node._Node__expanded_parameter_arguments:
+        cli_args += ['--params-file', path]
+    # rcl, not this test, decides precedence: it applies /** entries (where launch_ros
+    # files dicts) before node-keyed ones, whatever the file order.
+    rclpy.init(args=[])
+    try:
+        probe = rclpy.create_node(
+            SERVO_NODE, cli_args=cli_args,
+            automatically_declare_parameters_from_overrides=True,
+        )
+        values = {key: probe.get_parameter(key).value for key in keys}
+        probe.destroy_node()
+    finally:
+        rclpy.shutdown()
+    return values
+
+
+def _override(tmp_path, key, value):
+    """Write a run-style params file: keyed by Servo's fully qualified name."""
+    *parents, leaf = key.split('.')
+    tree = {leaf: value}
+    for parent in reversed(parents):
+        tree = {parent: tree}
+    path = tmp_path / 'override.yaml'
+    path.write_text(yaml.safe_dump({f'/{SERVO_NODE}': {'ros__parameters': tree}}))
+    return str(path)
+
+
+def test_params_file_beats_servo_yaml(launch_module, tmp_path):
+    # scale.joint is 0.5 in servo_sim.yaml, the node's own file.
+    key = 'moveit_servo.scale.joint'
+    context, actions = _setup(
+        launch_module, params_file=_override(tmp_path, key, 0.123)
+    )
+    assert _resolved(_servo_node(actions), context, [key]) == {key: 0.123}
+
+
+@pytest.mark.parametrize('key,value', [
+    ('moveit_servo.command_out_topic', '/real_arm_controller/joint_trajectory'),
+    ('use_sim_time', False),
+    ('robot_description', '<robot name="other"/>'),
+    ('robot_description_semantic', '<robot name="other"/>'),
+    ('robot_description_kinematics.right_arm.kinematics_solver', 'other/Plugin'),
+])
+def test_params_file_cannot_change_launch_owned_keys(launch_module, tmp_path, key, value):
+    context, actions = _setup(launch_module, params_file=_override(tmp_path, key, value))
+    assert _resolved(_servo_node(actions), context, [key])[key] != value
+
+
+def test_empty_params_file_adds_nothing(launch_module):
+    context, actions = _setup(launch_module)
+    node = _servo_node(actions)
+    node._perform_substitutions(context)
+    # servo_sim.yaml and the launch's dict; no guard file.
+    assert len(node._Node__expanded_parameter_arguments) == 2
 
 
 def test_launch_rejects_description_without_chain(launch_module):
