@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+First Motive Franka Panda description with a backend-selectable ros2_control System.
+
+This merges franka_description's Panda geometry (robots/fer/fer.urdf.xacro, arm +
+hand; Franka names the Panda `fer`) and injects First Motive's <ros2_control>
+system, selected by `sim_backend`. The Panda is a single fixed configuration and a
+simulation-only robot here, so there is no preset arg and no real backend.
+
+Visual meshes stay franka_description's COLLADA: the simulators and the desktop
+resolve package://franka_description/ from the installed share and read .dae.
+The STL copies under fm_description's panda_meshes/ serve Foxglove's description
+view only.
+
+Args:
+  sim_backend   mock | mujoco | gz | gazebo | isaac  (selects the System plugin; gz
+                is an alias for gazebo, anything else fails the xacro)
+  mujoco_model  MJCF the mujoco backend loads; injected by the fm_bringup registry
+                from fm_sim_models when sim_backend=mujoco (empty default otherwise)
+-->
+<!-- name must match the MoveIt SRDF (panda) so Servo/MoveIt accept the pair. -->
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="panda">
+
+  <xacro:arg name="sim_backend" default="mock"/>
+  <!-- Sets `backend`: gz becomes gazebo, and an unknown value fails the xacro. -->
+  <xacro:include filename="$(find fm_control)/urdf/sim_backend.xacro"/>
+  <xacro:fm_sim_backend
+      requested="$(arg sim_backend)"
+      supported="${['mock', 'mujoco', 'gazebo', 'isaac']}"/>
+  <xacro:arg name="isaac_joint_commands_topic" default="/isaac_joint_commands"/>
+  <xacro:arg name="isaac_joint_states_topic" default="/isaac_joint_states"/>
+  <!-- MujocoSystemInterface reads the MJCF from a URDF <param>. The path is owned by
+       fm_sim_models and injected by the fm_bringup registry; the default stays empty. -->
+  <xacro:arg name="mujoco_model" default=""/>
+  <xacro:property name="mujoco_model_path" value="$(arg mujoco_model)"/>
+  <!-- Controllers file the Gazebo gz_ros2_control plugin loads; gazebo backend only. -->
+  <xacro:arg name="gazebo_controllers_file" default=""/>
+
+  <!-- Geometry: franka_description's fer arm + Franka hand, with its default args
+       (fer_* names, mounted on a `base` link). -->
+  <xacro:include filename="$(find franka_description)/robots/fer/fer.urdf.xacro"/>
+  <xacro:include filename="$(find fm_control)/urdf/panda.ros2_control.xacro"/>
+
+  <xacro:panda_arm_system
+      sim_backend="${backend}"
+      mujoco_model_path="${mujoco_model_path}"
+      isaac_joint_commands_topic="$(arg isaac_joint_commands_topic)"
+      isaac_joint_states_topic="$(arg isaac_joint_states_topic)"/>
+
+  <!-- Gazebo hosts the controller_manager inside the sim via this world plugin,
+       which loads the controllers.yaml. Emitted only for the gazebo backend. -->
+  <xacro:if value="${backend == 'gazebo'}">
+    <gazebo>
+      <plugin filename="gz_ros2_control-system"
+              name="gz_ros2_control::GazeboSimROS2ControlPlugin">
+        <parameters>$(arg gazebo_controllers_file)</parameters>
+      </plugin>
+    </gazebo>
+  </xacro:if>
+
+</robot>

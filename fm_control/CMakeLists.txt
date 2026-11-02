@@ -114,6 +114,8 @@ if(BUILD_TESTING)
     TIMEOUT 120)
   ament_add_pytest_test(test_so101_xacro test/test_so101_xacro.py
     TIMEOUT 120)
+  ament_add_pytest_test(test_panda_xacro test/test_panda_xacro.py
+    TIMEOUT 120)
   ament_add_pytest_test(test_g1_xacro test/test_g1_xacro.py
     TIMEOUT 120)
 endif()

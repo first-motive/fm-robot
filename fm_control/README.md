@@ -1,7 +1,7 @@
 # fm_control
 
 The backend-selectable `ros2_control` descriptions for the OpenArm, SO101, G1-D,
-and Axol, the G1-D teleop bridge nodes, and a sim-only Jazzy MoveIt Servo launch
+Axol, and Franka Panda, the G1-D teleop bridge nodes, and a sim-only Jazzy MoveIt Servo launch
 for the OpenArm. C++ (`ament_cmake`, C++17).
 
 ## Role
@@ -40,6 +40,7 @@ urdf/
   so101.sim.urdf.xacro   / so101.ros2_control.xacro     SO101 (5-DOF arm + gripper)
   g1.sim.urdf.xacro      / g1.ros2_control.xacro        G1-D right arm (7-DOF)
   axol.sim.urdf.xacro    / axol.ros2_control.xacro      Axol bimanual (two 7-DOF arms, 14 joints)
+  panda.sim.urdf.xacro   / panda.ros2_control.xacro     Franka Panda (7-DOF arm + hand, sim only)
 src/
   control_node.cpp        placeholder node (unused by the backends below)
   g1_arm_sdk_bridge.cpp   G1-D real arm: Servo JointTrajectory -> unitree_hg/LowCmd
@@ -65,12 +66,12 @@ case below.
 ![hardware](doc/diagrams/hardware.svg)
 
 ```
-sim_backend   openarm                     so101                            g1_d                      axol
+sim_backend   openarm                     so101                            g1_d                      axol                             panda
   mock          mock_components/GenericSystem (all robots)
   mujoco        mujoco_ros2_control/MujocoSystemInterface (all robots)
   gazebo        gz_ros2_control/GazeboSimSystem (all robots)
   isaac         topic_based_ros2_control/TopicBasedSystem (all robots)
-  real          openarm_hardware/OpenArmHW   feetech_ros2_driver/FeetechHardwareInterface   (no plugin — bridge)   (deferred — no CAN plugin yet)
+  real          openarm_hardware/OpenArmHW   feetech_ros2_driver/FeetechHardwareInterface   (no plugin — bridge)   (deferred — no CAN plugin yet)   (none — sim only)
 ```
 
 The sim backends are identical across robots: only the geometry + joint set differ.
@@ -79,7 +80,8 @@ The `real` backend is where the robots diverge — see the G1-D asymmetry below.
 Every robot's `sim_backend` also accepts `gz`, the simulation stack's name for
 Gazebo; `gz` and `gazebo` select the same plugin. Any value a robot does not list
 above fails the xacro run rather than emitting a system with no `<hardware>`, so
-`real` fails for the Axol. `urdf/sim_backend.xacro` holds that rule for all four.
+`real` fails for the Axol and the Panda. `urdf/sim_backend.xacro` holds that rule
+for all five.
 
 ### OpenArm Arguments
 
@@ -156,7 +158,9 @@ xacro $(ros2 pkg prefix fm_control)/share/fm_control/urdf/so101.sim.urdf.xacro \
 Each emits its `<ros2_control>` system with joint names matching the geometry exactly,
 and (for gazebo) the `<gazebo>` world plugin that hosts the controller_manager inside
 the sim. SO101, G1-D, and Axol merge a vendored flat URDF from `fm_description`'s
-share; OpenArm parses its preset-driven `openarm_description` xacro. The robot name
+share; OpenArm parses its preset-driven `openarm_description` xacro, and the Panda
+includes `franka_description`'s `fer` xacro (joints `fer_joint1..7`,
+`fer_finger_joint1..2`). The robot name
 matches each MoveIt SRDF so Servo accepts the pair. Axol is bimanual, 14 joints
 total.
 
