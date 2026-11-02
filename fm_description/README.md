@@ -72,6 +72,7 @@ docker compose -f docker/compose.yaml -f docker/compose.macos.yaml \
 ./scripts/view-robot.sh --robot openarm                  # right_arm
 ./scripts/view-robot.sh --robot openarm --variant default_bimanual
 ./scripts/view-robot.sh --robot axol                     # bimanual (two 7-DOF arms)
+./scripts/view-robot.sh --robot panda                    # Franka Panda arm + hand
 ./scripts/view-robot.sh use_rviz:=true                   # RViz (needs an X display)
 ```
 
@@ -93,6 +94,7 @@ variants, and mesh strategy; the viewer and launchers select by `robot:=` and
 | `so101` | _(none — single description)_ | `SO-ARM100` flat URDF, vendored into share | `assets/` → `package://fm_description/so101_description/assets/` |
 | `openarm` | `right_arm`, `left_arm`, `default_bimanual`, `*_with_pinch_gripper` | `openarm_description` built ament_cmake package | visual `.dae` → `package://fm_description/openarm_meshes/*.stl` |
 | `axol` | `bimanual` | Almond Bot axol (flat URDF + STL, vendored) | `package://assembly/` → `package://fm_description/axol_description/` |
+| `panda` | _(none — single description)_ | `franka_description` built ament_cmake package (`robots/fer`) | visual `.dae` → `package://fm_description/panda_meshes/*.stl` |
 
 - **g1_d** — both the wheeled G1-D and the bipedal 29 DOF body are installed; pick
   with `--variant`. The bipedal `g1_description` ships hand variants too (e.g.
@@ -107,12 +109,17 @@ variants, and mesh strategy; the viewer and launchers select by `robot:=` and
 - **axol** — the upstream (`almond-bot/axol`) ships a flat URDF + STL, not a ROS
   package; the single `bimanual` description carries both 7-DOF arms, so
   `--variant` is ignored.
+- **panda** — Franka names the Panda `fer` (Franka Emika Robot), so the arm + hand
+  joints are `fer_joint1..7` and `fer_finger_joint1..2`. Only the `robots/fer` and
+  `robot_ee/franka_hand_white` visuals are converted to STL; `--variant` is
+  ignored. Its home pose is Franka's ready pose, since model-zero sits outside the
+  `fer_joint4` limits.
 
 Common launch args (every robot):
 
 | Arg | Default | Meaning |
 |-----|---------|---------|
-| `robot` | `g1_d` | registry key: `g1_d`, `so101`, `openarm`, `axol` |
+| `robot` | `g1_d` | registry key: `g1_d`, `so101`, `openarm`, `axol`, `panda` |
 | `variant` | _(empty → entry default)_ | robot sub-form (see the table above) |
 | `use_foxglove` | `true` | start foxglove_bridge on `ws://8765` |
 | `use_rviz` | `false` | start RViz (needs an X display) |
@@ -135,6 +142,7 @@ under this package's share (`rviz/`, `foxglove/`).
 | `so101` | `base_link` | `rviz/so101.rviz` | `foxglove/so101_view.json` |
 | `axol` | `base` | `rviz/axol.rviz` | `foxglove/axol_view.json` |
 | `openarm` | `openarm_right_base_link` | `rviz/openarm.rviz` | `foxglove/openarm_view.json` |
+| `panda` | `fer_link0` | `rviz/panda.rviz` | `foxglove/panda_view.json` |
 
 - **RViz** loads its view automatically. `use_rviz:=true` picks the config for the
   selected `robot`/`variant` and starts `rviz2 -d`; an unmapped variant opens bare

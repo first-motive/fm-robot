@@ -169,6 +169,65 @@ else()
     "./scripts/import-externals.sh before building to view the OpenArm.")
 endif()
 
+# Vendor the Franka Panda VISUAL meshes into this package's share as STL,
+# resolving as package://fm_description/panda_meshes/... for Foxglove. Like
+# OpenArm, franka_description ships as a built ament_cmake package with COLLADA
+# (.dae) visuals, so the same converter runs here. Every Franka visual mesh
+# declares Z_UP, so the converter's ignore-up_axis rule is a no-op for them.
+# Only the two subtrees the Panda uses are converted: the arm (robots/fer) and
+# the white hand (robot_ee/franka_hand_white); the full mesh set is ~86 MB as STL.
+# Output mirrors franka_description's meshes/ tree so the launch rewrite is a
+# plain substitution. Guarded so a clean checkout (e.g. CI without externals)
+# still builds.
+set(PANDA_SRC "${FM_EXTERNAL_DIR}/franka_description/meshes")
+set(PANDA_MESH_OUT "${CMAKE_CURRENT_BINARY_DIR}/panda_meshes")
+set(PANDA_SUBTREES robots/fer robot_ee/franka_hand_white)
+if(EXISTS "${PANDA_SRC}/robots/fer" AND EXISTS "${PANDA_SRC}/robot_ee/franka_hand_white")
+  find_package(Python3 REQUIRED COMPONENTS Interpreter)
+  execute_process(
+    COMMAND "${Python3_EXECUTABLE}" -c "import trimesh, collada"
+    RESULT_VARIABLE PANDA_DEPS_MISSING
+    OUTPUT_QUIET ERROR_QUIET)
+  if(PANDA_DEPS_MISSING)
+    message(WARNING
+      "fm_description: python trimesh + pycollada not importable — Panda "
+      "visual meshes not converted.")
+  else()
+    set(PANDA_DAE "")
+    set(PANDA_STL "")
+    set(PANDA_CONVERT_COMMANDS "")
+    foreach(subtree ${PANDA_SUBTREES})
+      file(GLOB dae_files CONFIGURE_DEPENDS "${PANDA_SRC}/${subtree}/visual/*.dae")
+      foreach(dae ${dae_files})
+        file(RELATIVE_PATH rel "${PANDA_SRC}" "${dae}")
+        string(REGEX REPLACE "\\.dae$" ".stl" rel_stl "${rel}")
+        list(APPEND PANDA_DAE "${dae}")
+        list(APPEND PANDA_STL "${PANDA_MESH_OUT}/${rel_stl}")
+      endforeach()
+      list(APPEND PANDA_CONVERT_COMMANDS
+        COMMAND "${Python3_EXECUTABLE}"
+                "${CMAKE_CURRENT_SOURCE_DIR}/scripts/convert_openarm_visual_meshes.py"
+                --src "${PANDA_SRC}/${subtree}"
+                --out "${PANDA_MESH_OUT}/${subtree}")
+    endforeach()
+
+    add_custom_command(
+      OUTPUT ${PANDA_STL}
+      ${PANDA_CONVERT_COMMANDS}
+      DEPENDS ${PANDA_DAE}
+              "${CMAKE_CURRENT_SOURCE_DIR}/scripts/convert_openarm_visual_meshes.py"
+      COMMENT "fm_description: converting Panda visual meshes to STL"
+      VERBATIM)
+    add_custom_target(panda_meshes ALL DEPENDS ${PANDA_STL})
+    install(DIRECTORY "${PANDA_MESH_OUT}/"
+            DESTINATION share/${PROJECT_NAME}/panda_meshes)
+  endif()
+else()
+  message(WARNING
+    "fm_description: Panda not found under ${PANDA_SRC} — run "
+    "./scripts/import-externals.sh before building to view the Panda.")
+endif()
+
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
   ament_lint_auto_find_test_dependencies()

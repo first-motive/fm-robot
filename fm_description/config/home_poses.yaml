@@ -15,6 +15,10 @@
 # arms into a natural at-sides stance (slight shoulder abduction + elbow bend);
 # the legs and waist stay at zero (straight upright stand). Verify visually with
 # the Test Plan step in the plan before trusting the exact angles.
+#
+# panda: model-zero is outside the Panda's limits (fer_joint4 spans -3.07 to
+# -0.07 rad). This is Franka's standard ready pose: elbow bent, hand pointing
+# down, fingers parallel to the base X axis.
 g1_d:
   g1_29dof_rev_1_0:
     left_shoulder_pitch_joint: 0.2
@@ -23,3 +27,9 @@ g1_d:
     right_shoulder_pitch_joint: 0.2
     right_shoulder_roll_joint: -0.2
     right_elbow_joint: 0.4
+panda:
+  panda:
+    fer_joint2: -0.785
+    fer_joint4: -2.356
+    fer_joint6: 1.571
+    fer_joint7: 0.785

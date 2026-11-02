@@ -1,0 +1,55 @@
+{
+  "configById": {
+    "3D!panda": {
+      "cameraState": {
+        "perspective": true,
+        "distance": 1.6,
+        "phi": 60,
+        "thetaOffset": 45,
+        "targetOffset": [0, 0, 0.4],
+        "target": [0, 0, 0],
+        "targetOrientation": [0, 0, 0, 1],
+        "fovy": 45,
+        "near": 0.01,
+        "far": 5000
+      },
+      "followMode": "follow-pose",
+      "followTf": "fer_link0",
+      "scene": {
+        "meshUpAxis": "z_up",
+        "enableStats": false,
+        "transforms": {
+          "showLabel": false
+        }
+      },
+      "transforms": {},
+      "topics": {
+        "/robot_description": {
+          "visible": true
+        }
+      },
+      "layers": {},
+      "publish": {
+        "type": "point",
+        "poseTopic": "/move_base_simple/goal",
+        "pointTopic": "/clicked_point",
+        "poseEstimateTopic": "/initialpose"
+      }
+    },
+    "firstmotive.fm-teleop.First Motive Joint State Publisher!jsp": {
+      "topic": "/joint_command"
+    }
+  },
+  "globalVariables": {},
+  "userNodes": {},
+  "playbackConfig": {
+    "speed": 1
+  },
+  "leftSidebarOpen": false,
+  "layout": {
+    "first": "3D!panda",
+    "second": "firstmotive.fm-teleop.First Motive Joint State Publisher!jsp",
+    "direction": "row",
+    "splitPercentage": 65
+  }
+}

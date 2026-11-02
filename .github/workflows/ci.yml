@@ -9,9 +9,9 @@ on:
   pull_request:
     paths-ignore: ["docs/**", "LICENSE", ".gitignore", "plans/**"]
 
-# Standalone build (hybrid CI): fm-robot builds its own packages plus the two
-# externals it genuinely consumes — openarm_description (xacro) and the
-# unitree_ros2 message packages (fm_control depends on unitree_hg + unitree_api).
+# Standalone build (hybrid CI): fm-robot builds its own packages plus the three
+# externals it genuinely consumes — openarm_description and franka_description
+# (xacro) and the unitree_ros2 message packages (fm_control depends on unitree_hg + unitree_api).
 # Every other external is file-vendored or reference-only and is COLCON_IGNORE'd.
 # unitree_ros (G1) and so_arm (SO101) are file-vendored into fm_description's
 # share at build, so they must be imported even though they are not built — the
@@ -40,8 +40,9 @@ jobs:
   selftest:
     uses: first-motive/.github/.github/workflows/bootstrap-selftest.yml@main
 
-  # The colcon block lives in first-motive/.github. openarm_description (xacro) and
-  # the unitree_ros2 message packages are the two externals genuinely built here;
+  # The colcon block lives in first-motive/.github. openarm_description and
+  # franka_description (xacro) and the unitree_ros2 message packages are the three
+  # externals genuinely built here;
   # everything else the manifest imports is file-vendored or reference-only.
   # Humble is the fleet's target; Jazzy is where the simulation stack runs. Jazzy
   # builds only for now (`test` is the reusable workflow's boolean input), so the
@@ -59,7 +60,7 @@ jobs:
       test: ${{ matrix.distro == 'humble' }}
       checkout-path: src/fm-robot
       repos-file: fm-robot.repos
-      build-externals: openarm_description unitree_ros2
+      build-externals: openarm_description franka_description unitree_ros2
       apt-packages: >-
         ros-${{ matrix.distro }}-rosidl-generator-dds-idl ros-${{ matrix.distro }}-cyclonedds
         ros-${{ matrix.distro }}-rmw-cyclonedds-cpp
@@ -127,7 +128,7 @@ jobs:
     uses: first-motive/.github/.github/workflows/ros2-smoke.yml@main
     with:
       repos-file: fm-robot.repos
-      build-externals: openarm_description unitree_ros2
+      build-externals: openarm_description franka_description unitree_ros2
       apt-packages: >-
         ros-humble-rosidl-generator-dds-idl
         ros-humble-cyclonedds ros-humble-rmw-cyclonedds-cpp
