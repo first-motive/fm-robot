@@ -32,6 +32,19 @@ is a metapackage — it builds nothing itself, it aggregates the three.
 robot URDF); `fm_sensors` is independent. Source:
 [`diagrams/packages.d2`](diagrams/packages.d2).
 
+## Workcell
+
+The physical layout the robot layer describes, seen from above as a schematic
+(not to scale, front at the bottom): the OpenArm body with its chest camera, an
+arm on each side, the wrist camera on the right wrist, and the table the cameras
+look down on. Camera frames come from
+[`fm_description/urdf/openarm_cameras.xacro`](../fm_description/urdf/openarm_cameras.xacro).
+
+![workcell](diagrams/workcell.svg)
+
+A tldraw sketch rather than d2, because position is the point here. Source:
+[`diagrams/workcell.tldr`](diagrams/workcell.tldr).
+
 ## Layered Detail
 
 Each layer's ROS graph, topics, and design notes live with the package that owns

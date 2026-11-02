@@ -6,18 +6,22 @@ the palette ([`styles.d2`](styles.d2)), the brand font ([`fonts/`](fonts/)), the
 diagrams live with the package they document, in `<package>/doc/diagrams/`, and
 import the palette here with a relative path. Each `.d2` is the source of truth;
 the matching `.svg` is the generated artifact the docs reference. Edit the `.d2`,
-then re-render.
+then re-render. Spatial diagrams such as [`workcell.tldr`](workcell.tldr) are tldraw
+sketches: they share the palette and font, but go through a tldraw export step
+instead of d2.
 
 ## Render
 
 ```bash
-./render.sh          # renders every *.d2 in the repo to its *.svg sidecar
+./render.sh          # renders every *.d2 and *.tldr in the repo to its *.svg sidecar
+./render.sh --check  # what CI runs: fails on a stale or missing SVG
 ```
 
-`render.sh` finds every `.d2` across the repo — repo-level here plus each package's
-`doc/diagrams/` — and renders it in place with the brand font. Needs `d2` on
-`PATH`. The font ships in [`fonts/`](fonts/), so rendering is self-contained — no
-font install, no personal tooling.
+`render.sh` finds every `.d2` and `.tldr` across the repo — repo-level here plus
+each package's `doc/diagrams/` — and renders it in place with the brand font. A
+`.d2` needs `d2` on `PATH`; exporting a `.tldr` needs Node (`npx`), and stamps the
+SVG with a hash of its inputs so `--check` needs no Node. The font ships in
+[`fonts/`](fonts/), so rendering is self-contained — no font install.
 
 ## Font
 
@@ -56,12 +60,13 @@ Every component is a stacked block built as a `grid-rows` container:
 ## Diagrams
 
 Each diagram lives with the package it documents; this folder holds only the
-repo-level `packages` overview. The set narrows from package wiring, through robot
+repo-level `packages` overview and the `workcell` sketch. The set narrows from package wiring, through robot
 state, to control and hardware.
 
 ```
 docs/diagrams/
   packages               how the four packages connect — ament deps; fm_robot aggregates, fm_control layers on fm_description
+  workcell               the physical layout from above — OpenArm body, arms, cameras, table (tldraw)
 
 fm_description/doc/diagrams/
   robot_state_publisher  where /robot_description comes from — URDF/xacro → xacro → robot_state_publisher
