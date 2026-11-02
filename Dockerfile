@@ -48,3 +48,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       ros-humble-topic-based-ros2-control \
       python3-opencv \
     && rm -rf /var/lib/apt/lists/*
+
+# franka_description: fm_description and fm_control declare it for the Panda. rosdep
+# resolves it to an apt package, so check-image-deps.sh requires it in the image, as
+# the downstream fm-app and fm-ros2 images inherit this one. Workspaces still build
+# the pinned 2.9.0 source from fm-robot.repos, which overlays this copy.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      ros-humble-franka-description \
+    && rm -rf /var/lib/apt/lists/*
