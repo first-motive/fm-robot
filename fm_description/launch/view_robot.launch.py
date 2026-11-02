@@ -357,6 +357,37 @@ _OPENARM_BRIDGE_PARAMS = {
 }
 
 
+# --- Panda ----------------------------------------------------------------
+
+# The Franka Panda ships as a built ament_cmake package (frankaemika/
+# franka_description), like OpenArm, so its xacro is processed at launch. Upstream
+# names the Panda `fer` (Franka Emika Robot): the arm + hand entry point is
+# robots/fer/fer.urdf.xacro and every joint is fer_*. fm_description's build
+# converts the visual .dae meshes to STL under panda_meshes/, mirroring
+# franka_description's meshes/ tree; collision meshes are already STL and stay on
+# franka_description.
+_PANDA_XACRO_REL = "robots/fer/fer.urdf.xacro"
+_PANDA_VISUAL_MESH_RE = re.compile(r"package://franka_description/meshes/([^\"']+?)\.dae")
+_PANDA_VISUAL_MESH_SUB = r"package://fm_description/panda_meshes/\1.stl"
+
+
+def _build_panda(share, variant):
+    """Process the Franka fer xacro (arm + hand) and rewrite .dae visuals to STL."""
+    # The Panda has a single arm + hand description; the variant arg is ignored.
+    try:
+        franka_share = get_package_share_directory("franka_description")
+    except PackageNotFoundError as exc:
+        raise RuntimeError(
+            "franka_description not found. It is a built ament_cmake package. "
+            "Import and build it:\n"
+            "  ./scripts/import-externals.sh && colcon build --symlink-install"
+        ) from exc
+
+    xacro_path = os.path.join(franka_share, _PANDA_XACRO_REL)
+    robot_description = xacro.process_file(xacro_path).toxml()
+    return _PANDA_VISUAL_MESH_RE.sub(_PANDA_VISUAL_MESH_SUB, robot_description)
+
+
 # --- Registry -------------------------------------------------------------
 
 # RViz view configs live under this package's rviz/ share (installed by
@@ -396,6 +427,13 @@ ROBOTS = {
         "build_description": _build_openarm,
         "bridge_params": _OPENARM_BRIDGE_PARAMS,
         "rviz_config": "openarm.rviz",
+    },
+    "panda": {
+        "label": "Franka Panda",
+        "default_variant": "panda",
+        "build_description": _build_panda,
+        "bridge_params": _DEFAULT_BRIDGE_PARAMS,
+        "rviz_config": "panda.rviz",
     },
 }
 
@@ -548,7 +586,7 @@ def generate_launch_description():
                 "robot",
                 default_value="g1_d",
                 description=(
-                    "Registry key selecting the robot: g1_d, so101, axol, openarm."
+                    "Registry key selecting the robot: g1_d, so101, axol, openarm, panda."
                 ),
             ),
             DeclareLaunchArgument(
@@ -558,7 +596,7 @@ def generate_launch_description():
                     "Robot sub-form (empty uses the entry's default): G1 URDF "
                     "basename (g1_d, g1_29dof_rev_1_0) or OpenArm robot_preset "
                     "(right_arm, left_arm, default_bimanual, *_with_pinch_gripper). "
-                    "Ignored for so101 and axol."
+                    "Ignored for so101, axol and panda."
                 ),
             ),
             DeclareLaunchArgument(

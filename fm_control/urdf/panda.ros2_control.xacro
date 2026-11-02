@@ -1,0 +1,117 @@
+<?xml version="1.0"?>
+<!--
+First Motive backend-selectable ros2_control for the Franka Panda (sim only).
+
+One <ros2_control> system for the 7-DOF arm plus the hand. The controllers,
+controller_manager, and the command/state interface set stay identical across the
+sim backends; only the <hardware> System plugin swaps, selected by `sim_backend`:
+
+  mock    -> mock_components/GenericSystem               (no sim; perfect state echo)
+  mujoco  -> mujoco_ros2_control/MujocoSystemInterface   (Mac daily driver, CPU)
+  gazebo  -> gz_ros2_control/GazeboSimSystem             (Linux/GPU)
+  isaac   -> topic_based_ros2_control/TopicBasedSystem   (Isaac Sim over ROS topics)
+
+There is no real backend: the Panda is a simulation robot here.
+
+Joint names mirror franka_description's `fer` geometry exactly: fer_joint1..7 and
+fer_finger_joint1. fer_finger_joint2 is the URDF <mimic> of fer_finger_joint1; it is
+emitted state-only under gazebo, where gz_ros2_control drives it as the mimic (DART
+has no mimic constraint, so the finger would not move). MuJoCo couples the fingers
+in its MJCF instead.
+-->
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <!-- Emit the <hardware> block for the selected backend. mujoco_model_path is
+       consumed only by mujoco; the isaac topics only by isaac. -->
+  <xacro:macro name="panda_backend_hardware"
+      params="sim_backend mujoco_model_path
+              isaac_joint_commands_topic isaac_joint_states_topic">
+
+    <xacro:if value="${sim_backend == 'mock'}">
+      <hardware>
+        <plugin>mock_components/GenericSystem</plugin>
+        <param name="fake_sensor_commands">false</param>
+        <param name="state_following_offset">0.0</param>
+      </hardware>
+    </xacro:if>
+
+    <xacro:if value="${sim_backend == 'mujoco'}">
+      <hardware>
+        <plugin>mujoco_ros2_control/MujocoSystemInterface</plugin>
+        <!-- fm_sim_models renames the Menagerie MJCF joints to fer_*, so they match
+             this system's joints exactly. -->
+        <param name="mujoco_model">${mujoco_model_path}</param>
+        <!-- Headless: no GLFW window. Required on macOS; a no-op under xvfb-run. -->
+        <param name="headless">true</param>
+      </hardware>
+    </xacro:if>
+
+    <xacro:if value="${sim_backend == 'gazebo'}">
+      <hardware>
+        <plugin>gz_ros2_control/GazeboSimSystem</plugin>
+      </hardware>
+    </xacro:if>
+
+    <xacro:if value="${sim_backend == 'isaac'}">
+      <hardware>
+        <plugin>topic_based_ros2_control/TopicBasedSystem</plugin>
+        <param name="joint_commands_topic">${isaac_joint_commands_topic}</param>
+        <param name="joint_states_topic">${isaac_joint_states_topic}</param>
+      </hardware>
+    </xacro:if>
+  </xacro:macro>
+
+  <!-- Position/velocity/effort command + state, uniform across the sim backends so
+       the controller set never changes. initial_position seeds the spawn pose. -->
+  <xacro:macro name="panda_joint" params="joint_name initial_position:=0.0">
+    <joint name="${joint_name}">
+      <command_interface name="position"/>
+      <command_interface name="velocity"/>
+      <command_interface name="effort"/>
+      <state_interface name="position">
+        <param name="initial_value">${initial_position}</param>
+      </state_interface>
+      <state_interface name="velocity">
+        <param name="initial_value">0.0</param>
+      </state_interface>
+      <state_interface name="effort">
+        <param name="initial_value">0.0</param>
+      </state_interface>
+    </joint>
+  </xacro:macro>
+
+  <!-- One <ros2_control> system: backend hardware + the 7 arm joints + the hand.
+       The arm spawns in Franka's ready pose, not all-zeros: zero is outside
+       fer_joint4's limits (-3.07 to -0.07 rad), and the straight arm is singular,
+       so MoveIt Servo would halt on every cycle. Same pose as fm_description's
+       home_poses.yaml. -->
+  <xacro:macro name="panda_arm_system"
+      params="sim_backend mujoco_model_path:=''
+              isaac_joint_commands_topic:=/isaac_joint_commands
+              isaac_joint_states_topic:=/isaac_joint_states">
+
+    <ros2_control name="panda_system" type="system">
+      <xacro:panda_backend_hardware
+          sim_backend="${sim_backend}"
+          mujoco_model_path="${mujoco_model_path}"
+          isaac_joint_commands_topic="${isaac_joint_commands_topic}"
+          isaac_joint_states_topic="${isaac_joint_states_topic}"/>
+
+      <xacro:panda_joint joint_name="fer_joint1" initial_position="0.0"/>
+      <xacro:panda_joint joint_name="fer_joint2" initial_position="-0.785"/>
+      <xacro:panda_joint joint_name="fer_joint3" initial_position="0.0"/>
+      <xacro:panda_joint joint_name="fer_joint4" initial_position="-2.356"/>
+      <xacro:panda_joint joint_name="fer_joint5" initial_position="0.0"/>
+      <xacro:panda_joint joint_name="fer_joint6" initial_position="1.571"/>
+      <xacro:panda_joint joint_name="fer_joint7" initial_position="0.785"/>
+      <xacro:panda_joint joint_name="fer_finger_joint1"/>
+
+      <xacro:if value="${sim_backend == 'gazebo'}">
+        <joint name="fer_finger_joint2">
+          <state_interface name="position"/>
+        </joint>
+      </xacro:if>
+    </ros2_control>
+  </xacro:macro>
+
+</robot>

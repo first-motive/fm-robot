@@ -9,7 +9,7 @@
 
   <buildtool_depend>ament_cmake</buildtool_depend>
 
-  <!-- OpenArm visual .dae -> .stl conversion (see CMakeLists) needs python trimesh
+  <!-- OpenArm and Panda visual .dae -> .stl conversion (see CMakeLists) needs python trimesh
        + pycollada. They have no rosdep rule (not in apt/rosdistro), so the base
        image installs them via pip; the build guards on import and skips conversion
        with a warning if absent, matching how assimp was provided image-only. -->
@@ -21,6 +21,7 @@
   <exec_depend>rviz2</exec_depend>
   <exec_depend>xacro</exec_depend>
   <exec_depend>openarm_description</exec_depend>
+  <exec_depend>franka_description</exec_depend>
 
   <test_depend>ament_lint_auto</test_depend>
   <test_depend>ament_lint_common</test_depend>

@@ -30,6 +30,7 @@ for every robot and variant.
 
 import importlib.util
 import os
+import re
 
 import pytest
 from ament_index_python.packages import get_package_share_directory
@@ -43,7 +44,8 @@ PKG = "fm_description"
 # unrelated match. G1 variants come from ``_G1_VARIANT_DIRS``; SO101 ignores its
 # variant; OpenArm presets mirror the validation list in ``_build_openarm`` (its
 # visual .dae meshes are rewritten to fm_description; collision STL meshes stay
-# on openarm_description by design). The coverage tests below assert this list
+# on openarm_description by design). Panda ignores its variant and rewrites its
+# visuals the same way, onto panda_meshes/. The coverage tests below assert this list
 # stays in sync with the registry, so a robot or G1 variant added or removed
 # without updating CASES fails CI.
 CASES = [
@@ -56,6 +58,7 @@ CASES = [
     ("openarm", "default_bimanual", "package://fm_description/openarm_meshes/"),
     ("openarm", "right_arm_with_pinch_gripper", "package://fm_description/openarm_meshes/"),
     ("openarm", "left_arm_with_pinch_gripper", "package://fm_description/openarm_meshes/"),
+    ("panda", "panda", "package://fm_description/panda_meshes/robots/fer/visual/"),
 ]
 
 
@@ -106,3 +109,39 @@ def test_every_g1_variant_has_a_case():
         f"CASES G1 variants out of sync with registry: "
         f"{covered ^ set(module._G1_VARIANT_DIRS)}"
     )
+
+
+def test_panda_uses_fer_joints_and_hand():
+    """The Panda description carries the fer_* arm joints and both hand fingers."""
+    module, share = _load_launch_module()
+    urdf = module.ROBOTS["panda"]["build_description"](share, "panda")
+
+    for i in range(1, 8):
+        assert f'<joint name="fer_joint{i}"' in urdf
+    assert '<joint name="fer_finger_joint1"' in urdf
+    assert '<joint name="fer_finger_joint2"' in urdf
+    assert "package://fm_description/panda_meshes/robot_ee/franka_hand_white/" in urdf
+    assert ".dae" not in urdf, "a Panda visual .dae was left unrewritten"
+
+
+def test_panda_visual_meshes_are_installed():
+    """Every rewritten Panda visual URI names an STL the build installed."""
+    module, share = _load_launch_module()
+    urdf = module.ROBOTS["panda"]["build_description"](share, "panda")
+
+    prefix = "package://fm_description/"
+    uris = set(re.findall(r'"(package://fm_description/panda_meshes/[^"]+)"', urdf))
+    assert uris, "no Panda visual mesh points at panda_meshes/"
+    missing = [u for u in uris if not os.path.isfile(os.path.join(share, u[len(prefix):]))]
+    assert not missing, f"Panda visual meshes not installed: {sorted(missing)}"
+
+
+def test_panda_home_pose_names_real_joints():
+    """Every joint in the Panda home pose exists in its description."""
+    module, share = _load_launch_module()
+    urdf = module.ROBOTS["panda"]["build_description"](share, "panda")
+
+    pose = module._load_home_pose(share, "panda", "panda")
+    assert pose, "panda home pose missing from installed config"
+    unknown = [j for j in pose if f'<joint name="{j}"' not in urdf]
+    assert not unknown, f"home pose names joints the Panda lacks: {unknown}"
