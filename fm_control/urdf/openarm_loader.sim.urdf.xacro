@@ -10,7 +10,9 @@ where it is installed. This file adds what a sim run needs on top, and nothing e
   - one ros2_control system over both arms (mujoco, gazebo) or one per arm (mock, isaac),
     with the loader's joint names, spawning in the bimanual ready pose
   - cam_chest_optical and cam_wrist_r_optical, the camera frames the loader_openarm_v2
-    robot profile names, at the description's own chest_cam and right_wrist_cam
+    robot profile names, at the description's own chest_cam and right_wrist_cam, and
+    cam_waist_optical and cam_wrist_l_optical in the same spelling at its waist_cam and
+    left_wrist_cam
 
 There is no real backend: on the robot the loader owns the hardware.
 
@@ -75,6 +77,16 @@ Args:
   <joint name="cam_wrist_r_optical_joint" type="fixed">
     <parent link="right_wrist_cam"/>
     <child link="cam_wrist_r_optical"/>
+  </joint>
+  <link name="cam_waist_optical"/>
+  <joint name="cam_waist_optical_joint" type="fixed">
+    <parent link="waist_cam"/>
+    <child link="cam_waist_optical"/>
+  </joint>
+  <link name="cam_wrist_l_optical"/>
+  <joint name="cam_wrist_l_optical_joint" type="fixed">
+    <parent link="left_wrist_cam"/>
+    <child link="cam_wrist_l_optical"/>
   </joint>
 
   <xacro:if value="${backend == 'gazebo'}">

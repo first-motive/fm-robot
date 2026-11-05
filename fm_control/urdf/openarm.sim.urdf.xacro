@@ -173,10 +173,13 @@ Args:
 
   <!-- Camera frames on whichever links this preset carries. -->
   <xacro:property name="right_arms" value="${[s for s in arm_specs if s['prefix'] == 'openarm_right_']}"/>
+  <xacro:property name="left_arms" value="${[s for s in arm_specs if s['prefix'] == 'openarm_left_']}"/>
   <xacro:openarm_cameras
       body="${'body' in components and preset_cfg['body']['enabled']}"
       right_arm="${len(right_arms) > 0}"
       right_hand="${len(right_arms) > 0 and right_arms[0]['hand']}"
+      left_arm="${len(left_arms) > 0}"
+      left_hand="${len(left_arms) > 0 and left_arms[0]['hand']}"
       loader_hand="${loader_hand}"
       collapse_empty_links="$(arg collapse_internal_empty_links)"/>
 

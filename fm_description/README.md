@@ -262,19 +262,22 @@ render.
 ### OpenArm: Camera Frames
 
 `urdf/openarm_cameras.xacro` holds the OpenArm camera optical frames (ROS optical
-convention: z forward, x right, y down). `fm_control`'s OpenArm xacro includes it;
-the poses and their calibration history came from fm-skills, renamed to `openarm_*`.
+convention: z forward, x right, y down). `fm_control`'s OpenArm xacro includes it.
+The chest and right wrist poses and their calibration history came from fm-skills,
+renamed to `openarm_*`; the waist and left wrist poses are Anvil's CAD URDF, not yet
+calibrated.
 
 | Link | Parent | Emitted when |
 |------|--------|--------------|
 | `openarm_cam_chest_optical` | `openarm_body_link0` | the preset enables the body |
-| `openarm_right_cam_wrist_mount` | `openarm_right_link7` (or `openarm_right_ee_base_link` when link7 is collapsed into it) | the preset has a right arm and no loader hand |
-| `openarm_right_cam_wrist_optical` | `openarm_right_hand` with the loader hand, else `openarm_right_cam_wrist_mount` | the preset has a right arm |
+| `openarm_cam_waist_optical` | `openarm_body_link0` | the preset enables the body |
+| `openarm_<side>_cam_wrist_mount` | `openarm_<side>_link7` (or `openarm_<side>_ee_base_link` when link7 is collapsed into it) | the preset has that arm and no loader hand |
+| `openarm_<side>_cam_wrist_optical` | `openarm_<side>_hand` with the loader hand, else `openarm_<side>_cam_wrist_mount` | the preset has that arm |
 
-Each joint is the link name plus `_joint`. The wrist pose was measured against the
-loader's hand frame, 100.1 mm out from link7 along the wrist and flipped about x.
-With the loader hand that frame is `openarm_right_hand`; without it the wrist mount
-stands in at the same pose.
+`<side>` is `right` or `left`. Each joint is the link name plus `_joint`. The wrist
+pose was measured against the loader's hand frame, 100.1 mm out from link7 along the
+wrist and flipped about x, the same on both arms. With the loader hand that frame is
+`openarm_<side>_hand`; without it the wrist mount stands in at the same pose.
 
 The `view_robot` OpenArm entry still processes the upstream `openarm_description`
 xacro, so it does not show these frames.

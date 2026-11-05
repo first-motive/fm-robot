@@ -30,6 +30,7 @@ import xml.etree.ElementTree as ET
 from ament_index_python.packages import get_package_share_directory
 import numpy as np
 import pytest
+from urdf_kinematics import floats, origin_pose, rotation_rpy, world_pose
 import xacro
 
 # The loader's joint limits per side: (lower, upper, effort, velocity).
@@ -157,57 +158,6 @@ def _limit(joint):
     return tuple(float(limit.get(key)) for key in ('lower', 'upper', 'effort', 'velocity'))
 
 
-def _floats(element, attribute, default):
-    text = None if element is None else element.get(attribute)
-    return np.array(default if text is None else text.split(), dtype=float)
-
-
-def _rotation_rpy(roll, pitch, yaw):
-    cr, sr = math.cos(roll), math.sin(roll)
-    cp, sp = math.cos(pitch), math.sin(pitch)
-    cy, sy = math.cos(yaw), math.sin(yaw)
-    return np.array([
-        [cy * cp, cy * sp * sr - sy * cr, cy * sp * cr + sy * sr],
-        [sy * cp, sy * sp * sr + cy * cr, sy * sp * cr - cy * sr],
-        [-sp, cp * sr, cp * cr],
-    ])
-
-
-def _rotation_axis_angle(axis, angle):
-    x, y, z = axis / np.linalg.norm(axis)
-    skew = np.array([[0, -z, y], [z, 0, -x], [-y, x, 0]])
-    return np.eye(3) + math.sin(angle) * skew + (1 - math.cos(angle)) * skew @ skew
-
-
-def _world_pose(robot, link, positions):
-    """Return the 4x4 world pose of `link` with the named joints at `positions`."""
-    joint_by_child = {j.find('child').get('link'): j for j in robot.findall('joint')}
-    pose = np.eye(4)
-    while link in joint_by_child:
-        joint = joint_by_child[link]
-        origin = joint.find('origin')
-        to_joint = np.eye(4)
-        to_joint[:3, :3] = _rotation_rpy(*_floats(origin, 'rpy', [0, 0, 0]))
-        to_joint[:3, 3] = _floats(origin, 'xyz', [0, 0, 0])
-        motion = np.eye(4)
-        value = positions.get(joint.get('name'), 0.0)
-        axis = _floats(joint.find('axis'), 'xyz', [1, 0, 0])
-        if joint.get('type') in ('revolute', 'continuous'):
-            motion[:3, :3] = _rotation_axis_angle(axis, value)
-        elif joint.get('type') == 'prismatic':
-            motion[:3, 3] = axis * value
-        pose = to_joint @ motion @ pose
-        link = joint.find('parent').get('link')
-    return pose
-
-
-def _origin(element):
-    pose = np.eye(4)
-    pose[:3, :3] = _rotation_rpy(*_floats(element, 'rpy', [0, 0, 0]))
-    pose[:3, 3] = _floats(element, 'xyz', [0, 0, 0])
-    return pose
-
-
 def _link(robot, name):
     link = robot.find(f"link[@name='{name}']")
     assert link is not None, name
@@ -252,9 +202,9 @@ def _collision_points(robot, side, positions):
         if not name.startswith(f'openarm_{side}_') or collision is None:
             continue
         mesh = collision.find('geometry/mesh')
-        triangles = _read_stl(_package_path(mesh.get('filename'))) * _floats(
+        triangles = _read_stl(_package_path(mesh.get('filename'))) * floats(
             mesh, 'scale', [1, 1, 1])
-        pose = _world_pose(robot, name, positions) @ _origin(collision.find('origin'))
+        pose = world_pose(robot, name, positions) @ origin_pose(collision.find('origin'))
         local = _surface_points(triangles, SAMPLE_SPACING_M)
         points[name] = local @ pose[:3, :3].T + pose[:3, 3]
     return points
@@ -317,8 +267,8 @@ def test_loader_joint_limits(loader, side):
 @pytest.mark.parametrize('side,joints,flange,tcp,tcp_x,tcp_z', LOADER_FK)
 def test_fk_matches_loader(loader, side, joints, flange, tcp, tcp_x, tcp_z):
     positions = {f'openarm_{side}_joint{i}': q for i, q in enumerate(joints, start=1)}
-    flange_pose = _world_pose(loader, f'openarm_{side}_ee_base_link', positions)
-    tcp_pose = _world_pose(loader, f'openarm_{side}_grasp_frame', positions)
+    flange_pose = world_pose(loader, f'openarm_{side}_ee_base_link', positions)
+    tcp_pose = world_pose(loader, f'openarm_{side}_grasp_frame', positions)
     assert flange_pose[:3, 3] == pytest.approx(flange, abs=POSITION_TOLERANCE_M)
     assert tcp_pose[:3, 3] == pytest.approx(tcp, abs=POSITION_TOLERANCE_M)
     assert tcp_pose[:3, 0] == pytest.approx(tcp_x, abs=AXIS_TOLERANCE)
@@ -334,8 +284,8 @@ def test_tcp_sits_on_the_hand_axis(side, collapse):
         collapse_internal_empty_links=collapse,
     )
     joint7 = _joint(robot, f'openarm_{side}_joint7')
-    tcp = np.linalg.inv(_world_pose(robot, joint7.find('child').get('link'), {})) @ (
-        _world_pose(robot, f'openarm_{side}_grasp_frame', {})
+    tcp = np.linalg.inv(world_pose(robot, joint7.find('child').get('link'), {})) @ (
+        world_pose(robot, f'openarm_{side}_grasp_frame', {})
     )
     assert tcp[:3, 3] == pytest.approx((0.0, 0.0, -0.1801), abs=1e-9)
     assert tcp[:3, 2] == pytest.approx((0.0, 0.0, -1.0), abs=1e-9)
@@ -349,7 +299,7 @@ def test_fingers_are_prismatic_mimics(loader, side):
         assert joint.get('type') == 'prismatic'
         assert joint.find('parent').get('link') == prefix + 'hand'
         assert _limit(joint) == pytest.approx((0.0, 0.05, 333, 10.0))
-        assert tuple(_floats(joint.find('axis'), 'xyz', [1, 0, 0])) == axis
+        assert tuple(floats(joint.find('axis'), 'xyz', [1, 0, 0])) == axis
     assert _joint(loader, prefix + 'finger_joint1').find('mimic') is None
     mimic = _joint(loader, prefix + 'finger_joint2').find('mimic')
     assert mimic.get('joint') == prefix + 'finger_joint1'
@@ -364,9 +314,9 @@ def test_wrist_is_the_loader_link7(loader, side):
     expected = LOADER_LINK7[side]
     prefix = f'openarm_{side}_'
     hand_in_link7 = np.eye(4)
-    hand_in_link7[:3, :3] = _rotation_rpy(*expected['hand'][1])
+    hand_in_link7[:3, :3] = rotation_rpy(*expected['hand'][1])
     hand_in_link7[:3, 3] = expected['hand'][0]
-    link7 = _origin(_joint(loader, prefix + 'hand_joint').find('origin')) @ np.linalg.inv(
+    link7 = origin_pose(_joint(loader, prefix + 'hand_joint').find('origin')) @ np.linalg.inv(
         hand_in_link7)
     rotation = link7[:3, :3]
     wrist = _link(loader, prefix + 'ee_base_link')
@@ -376,18 +326,18 @@ def test_wrist_is_the_loader_link7(loader, side):
     for element, folder, mesh in (('visual', 'visual', 'link7.dae'),
                                   ('collision', 'collision', 'link7_symp.stl')):
         geometry = wrist.find(element)
-        assert _origin(geometry.find('origin')) == pytest.approx(
+        assert origin_pose(geometry.find('origin')) == pytest.approx(
             link7 @ mesh_in_link7, abs=1e-5), element
         uri = geometry.find('geometry/mesh').get('filename')
         assert uri == ('package://openarm_description/assets/robot/openarm_v1.0/mesh/arm/'
                        f'{folder}/{mesh}')
         assert os.path.isfile(_package_path(uri))
-        assert tuple(_floats(geometry.find('geometry/mesh'), 'scale', [1, 1, 1])) == (
+        assert tuple(floats(geometry.find('geometry/mesh'), 'scale', [1, 1, 1])) == (
             pytest.approx((0.001, 0.001 * expected['scale_y'], 0.001)))
 
     inertial = wrist.find('inertial')
     assert float(inertial.find('mass').get('value')) == pytest.approx(expected['mass'])
-    origin = _origin(inertial.find('origin'))
+    origin = origin_pose(inertial.find('origin'))
     assert origin[:3, :3] == pytest.approx(np.eye(3))
     assert origin[:3, 3] == pytest.approx(rotation @ expected['com'], abs=1e-6)
     ixx, iyy, izz, ixy, ixz, iyz = expected['inertia']
@@ -442,15 +392,17 @@ def test_ros2_control_drives_finger_joint1_without_a_gazebo_mimic(loader):
     assert not {name for name in joints if name.endswith('finger_joint2')}
 
 
-def test_wrist_camera_rides_the_hand(loader, pinch):
+@pytest.mark.parametrize('side', ['right', 'left'])
+def test_wrist_camera_rides_the_hand(loader, pinch, side):
     # The camera hangs from the loader hand and lands where the pinch preset's
     # stand-in mount put it, which is where it sits on the real arm.
-    optical = _joint(loader, 'openarm_right_cam_wrist_optical_joint')
-    assert optical.find('parent').get('link') == 'openarm_right_hand'
-    assert loader.find("link[@name='openarm_right_cam_wrist_mount']") is None
-    positions = {f'openarm_right_joint{i}': 0.3 * i for i in range(1, 8)}
-    assert _world_pose(loader, 'openarm_right_cam_wrist_optical', positions) == pytest.approx(
-        _world_pose(pinch, 'openarm_right_cam_wrist_optical', positions), abs=1e-9
+    optical = _joint(loader, f'openarm_{side}_cam_wrist_optical_joint')
+    assert optical.find('parent').get('link') == f'openarm_{side}_hand'
+    assert loader.find(f"link[@name='openarm_{side}_cam_wrist_mount']") is None
+    positions = {f'openarm_{side}_joint{i}': 0.3 * i for i in range(1, 8)}
+    camera = f'openarm_{side}_cam_wrist_optical'
+    assert world_pose(loader, camera, positions) == pytest.approx(
+        world_pose(pinch, camera, positions), abs=1e-9
     )
 
 
