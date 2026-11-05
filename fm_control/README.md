@@ -121,8 +121,9 @@ each joint). The 168 mm loader hands touch at the pinch pose, so with `hand:=loa
 joint2 opens from 0.0265 to 0.13 rad: the grasp frames sit 210 mm apart and the arms
 keep at least 40 mm clear, fingers open or closed.
 
-The OpenArm description also carries the chest and right wrist camera frames from
-`fm_description/urdf/openarm_cameras.xacro`, on whichever links the preset enables.
+The OpenArm description also carries the chest, waist, and both wrist camera frames
+from `fm_description/urdf/openarm_cameras.xacro`, on whichever links the preset
+enables.
 
 ### OpenArm In The Loader's Names
 
@@ -133,7 +134,8 @@ fm-skills' `openarm_v2_anvil_description`, which is private and found only where
 installed. The wrapper adds the same ros2_control systems as above (no `real`
 backend: on the robot the loader owns the hardware), the mirrored bimanual ready pose,
 and the profile's camera frames `cam_chest_optical` and `cam_wrist_r_optical` on the
-description's `chest_cam` and `right_wrist_cam`.
+description's `chest_cam` and `right_wrist_cam`, with `cam_waist_optical` and
+`cam_wrist_l_optical` in the same spelling on `waist_cam` and `left_wrist_cam`.
 
 ```bash
 xacro $(ros2 pkg prefix fm_control)/share/fm_control/urdf/openarm_loader.sim.urdf.xacro \

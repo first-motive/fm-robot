@@ -31,7 +31,9 @@ REAL = 'openarm_v2_anvil_description'
 SIDES = ('follower_l_', 'follower_r_')
 CAMERA_LINKS = ('chest_cam', 'waist_cam', 'left_wrist_cam', 'right_wrist_cam')
 INITIAL_POSITION = 'state_interface[@name="position"]/param'
-PROFILE_CAMERAS = {'cam_chest_optical': 'chest_cam', 'cam_wrist_r_optical': 'right_wrist_cam'}
+PROFILE_CAMERAS = {'cam_chest_optical': 'chest_cam', 'cam_waist_optical': 'waist_cam',
+                   'cam_wrist_l_optical': 'left_wrist_cam',
+                   'cam_wrist_r_optical': 'right_wrist_cam'}
 PLUGIN_BY_BACKEND = {
     'mock': 'mock_components/GenericSystem',
     'mujoco': 'mujoco_ros2_control/MujocoSystemInterface',

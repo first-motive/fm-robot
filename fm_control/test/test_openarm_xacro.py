@@ -23,7 +23,9 @@ import os
 import xml.etree.ElementTree as ET
 
 from ament_index_python.packages import get_package_share_directory
+import numpy as np
 import pytest
+from urdf_kinematics import rotation_rpy, world_pose
 import xacro
 
 PLUGIN_BY_BACKEND = {
@@ -35,7 +37,15 @@ PLUGIN_BY_BACKEND = {
     'real': 'openarm_hardware/OpenArmHW',
 }
 
-CAMERA_LINKS = {'openarm_cam_chest_optical', 'openarm_right_cam_wrist_optical'}
+BODY_CAMERA_LINKS = {'openarm_cam_chest_optical', 'openarm_cam_waist_optical'}
+CAMERA_LINKS = BODY_CAMERA_LINKS | {f'openarm_{side}_cam_wrist_optical'
+                                    for side in ('right', 'left')}
+# Anvil's CAD URDF (openarm_v2_anvil_description): waist_cam_joint on body_link0, and
+# left_wrist_cam_joint and right_wrist_cam_joint, which share one origin, on each hand.
+CAD_WAIST_CAMERA = ([0.0827, 0.0, 0.3898], [-1.5708, 0.0, -1.5708])
+CAD_WRIST_CAMERA = ([0.074, 0.001, 0.009], [-0.8255, 0.0, 1.5708])
+# The loader hand frame from link7 on either arm (openarm_parallel_hand.xacro).
+HAND_IN_LINK7 = ([0.0, 0.0, -0.1001], [3.141592653589793, 0.0, 0.0])
 
 
 def _process(**mappings):
@@ -51,6 +61,18 @@ def _plugins(robot):
 
 def _links(robot):
     return {link.get('name') for link in robot.findall('link')}
+
+
+def _pose(xyz, rpy):
+    pose = np.eye(4)
+    pose[:3, :3] = rotation_rpy(*rpy)
+    pose[:3, 3] = xyz
+    return pose
+
+
+def _relative_pose(robot, parent, child):
+    # Every joint at zero, so the pose is the description's fixed geometry.
+    return np.linalg.inv(world_pose(robot, parent, {})) @ world_pose(robot, child, {})
 
 
 @pytest.mark.parametrize('backend,plugin', PLUGIN_BY_BACKEND.items())
@@ -155,19 +177,43 @@ def test_isaac_topics():
 
 
 @pytest.mark.parametrize(
-    'preset,collapse',
-    [('default_bimanual', 'true'), ('default_bimanual', 'false'), ('right_arm', 'true')],
+    'preset,collapse,side',
+    [('default_bimanual', 'true', 'right'), ('default_bimanual', 'false', 'right'),
+     ('default_bimanual', 'true', 'left'), ('default_bimanual', 'false', 'left'),
+     ('right_arm', 'true', 'right'), ('left_arm', 'true', 'left')],
 )
-def test_wrist_camera_rides_link7_frame(preset, collapse):
+def test_wrist_camera_rides_link7_frame(preset, collapse, side):
     # Without the loader hand, the wrist pose is measured from joint7's child,
     # whatever link the preset names.
     robot = _process(robot_preset=preset, collapse_internal_empty_links=collapse, hand='pinch')
-    mount = robot.find("joint[@name='openarm_right_cam_wrist_mount_joint']")
-    joint7 = robot.find("joint[@name='openarm_right_joint7']")
+    mount = robot.find(f"joint[@name='openarm_{side}_cam_wrist_mount_joint']")
+    joint7 = robot.find(f"joint[@name='openarm_{side}_joint7']")
     assert mount.find('parent').get('link') == joint7.find('child').get('link')
 
 
-def test_cameras_follow_preset():
-    # right_arm has no body to carry the chest camera; left_arm has no right wrist.
-    assert 'openarm_cam_chest_optical' not in _links(_process(robot_preset='right_arm'))
-    assert not CAMERA_LINKS & _links(_process(robot_preset='left_arm'))
+@pytest.mark.parametrize('preset,side', [('right_arm', 'right'), ('left_arm', 'left')])
+def test_cameras_follow_preset(preset, side):
+    # A single-arm preset has no body for the chest and waist cameras, and only its
+    # own wrist camera.
+    assert CAMERA_LINKS & _links(_process(robot_preset=preset)) == {
+        f'openarm_{side}_cam_wrist_optical'}
+
+
+@pytest.mark.parametrize('hand', ['loader', 'pinch'])
+def test_waist_camera_sits_at_the_cad_pose(hand):
+    robot = _process(robot_preset='default_bimanual', hand=hand)
+    assert _relative_pose(robot, 'openarm_body_link0', 'openarm_cam_waist_optical') == (
+        pytest.approx(_pose(*CAD_WAIST_CAMERA), abs=1e-9))
+
+
+@pytest.mark.parametrize('hand', ['loader', 'pinch'])
+@pytest.mark.parametrize('side', ['right', 'left'])
+def test_wrist_camera_sits_at_the_cad_pose(side, hand):
+    # Measured from joint7's child, the camera is the CAD wrist pose on the loader hand
+    # frame, whether the loader hand or the stand-in mount carries it.
+    robot = _process(robot_preset='default_bimanual', hand=hand)
+    joint7 = robot.find(f"joint[@name='openarm_{side}_joint7']")
+    camera = _relative_pose(
+        robot, joint7.find('child').get('link'), f'openarm_{side}_cam_wrist_optical')
+    assert camera == pytest.approx(
+        _pose(*HAND_IN_LINK7) @ _pose(*CAD_WRIST_CAMERA), abs=1e-9)
