@@ -32,6 +32,8 @@ import xml.etree.ElementTree as ET
 from ament_index_python.packages import get_package_share_directory, PackageNotFoundError
 from launch import LaunchContext
 from launch.actions import ExecuteProcess, RegisterEventHandler, Shutdown
+from launch.event_handlers import OnShutdown
+import launch.events
 from launch.utilities import perform_substitutions
 from launch_ros.actions import Node
 import pytest
@@ -256,9 +258,14 @@ def _override(tmp_path, key, value):
     return str(path)
 
 
-def test_params_file_beats_servo_yaml(launch_module, tmp_path):
-    # scale.joint is 0.5 in servo_sim.yaml, the node's own file.
-    key = 'moveit_servo.scale.joint'
+@pytest.mark.parametrize('scale', ['joint', 'linear', 'rotational'])
+def test_params_file_beats_servo_yaml(launch_module, servo_params, tmp_path, scale):
+    # fm-sim exposes all three scales as run tunables.
+    key = f'moveit_servo.scale.{scale}'
+    baseline = servo_params['scale'][scale]
+    assert baseline != 0.123
+    context, actions = _setup(launch_module)
+    assert _resolved(_servo_node(actions), context, [key]) == {key: baseline}
     context, actions = _setup(
         launch_module, params_file=_override(tmp_path, key, 0.123)
     )
@@ -275,6 +282,45 @@ def test_params_file_beats_servo_yaml(launch_module, tmp_path):
 def test_params_file_cannot_change_launch_owned_keys(launch_module, tmp_path, key, value):
     context, actions = _setup(launch_module, params_file=_override(tmp_path, key, value))
     assert _resolved(_servo_node(actions), context, [key])[key] != value
+
+
+def _guard_path(node, context):
+    node._perform_substitutions(context)
+    paths = [path for path, _ in node._Node__expanded_parameter_arguments]
+    guards = [path for path in paths if os.path.basename(path).startswith('servo_node_guard_')]
+    assert len(guards) == 1
+    return guards[0]
+
+
+def test_guard_file_is_removed_on_shutdown(launch_module, tmp_path):
+    key = 'moveit_servo.scale.joint'
+    context, actions = _setup(launch_module, params_file=_override(tmp_path, key, 0.123))
+    guard = _guard_path(_servo_node(actions), context)
+    assert os.path.exists(guard)
+    handlers = [
+        action.event_handler for action in actions
+        if isinstance(action, RegisterEventHandler)
+        and isinstance(action.event_handler, OnShutdown)
+    ]
+    assert len(handlers) == 1
+    handlers[0].handle(launch.events.Shutdown(), context)
+    assert not os.path.exists(guard)
+    # A second shutdown event finds nothing to remove and does not fail.
+    handlers[0].handle(launch.events.Shutdown(), context)
+
+
+def test_launch_refuses_a_namespaced_servo(launch_module):
+    # ros_namespace is what a wrapper's PushRosNamespace sets.
+    with pytest.raises(RuntimeError, match='/wrapped/servo_node'):
+        _setup(launch_module, ros_namespace='/wrapped')
+
+
+@pytest.mark.parametrize('namespace', [None, '', '/'])
+def test_launch_accepts_the_root_namespace(launch_module, namespace):
+    context = LaunchContext()
+    if namespace is not None:
+        context.launch_configurations['ros_namespace'] = namespace
+    launch_module.check_servo_name(context)
 
 
 def test_empty_params_file_adds_nothing(launch_module):

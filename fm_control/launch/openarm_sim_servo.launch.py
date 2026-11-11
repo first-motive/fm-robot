@@ -20,7 +20,8 @@ Start MoveIt Servo (Jazzy) for a SIMULATED OpenArm right arm.
 Sim only: collision checking is off and the SRDF has no collision matrix, so this
 must never drive a real arm. A real-arm Servo needs its own reviewed profile. The
 launch refuses to start unless ``sim_only:=true`` is passed and the ROS graph is
-host-local.
+host-local. It also refuses a pushed ROS namespace, since Servo must run as
+``/servo_node``.
 
 Brings up ``/servo_node`` on sim time with the description, SRDF, KDL kinematics and
 ``config/openarm/servo_sim.yaml``, then selects its command type: Jazzy's Servo
@@ -47,6 +48,7 @@ refuses to start unless discovery is host-local: ``ROS_AUTOMATIC_DISCOVERY_RANGE
 LOCALHOST`` (what the fm-sim agent sets on every run) or ``ROS_LOCALHOST_ONLY=1``.
 """
 
+import contextlib
 import os
 import tempfile
 import xml.etree.ElementTree as ET
@@ -56,7 +58,7 @@ from launch import LaunchDescription
 from launch.actions import (
     DeclareLaunchArgument, ExecuteProcess, OpaqueFunction, RegisterEventHandler, Shutdown,
 )
-from launch.event_handlers import OnProcessExit, OnProcessIO
+from launch.event_handlers import OnProcessExit, OnProcessIO, OnShutdown
 import launch.logging
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
@@ -136,6 +138,19 @@ def check_host_local(environ):
     )
 
 
+def check_servo_name(context):
+    """Raise unless Servo starts as ``/servo_node``, the name its contract and guard use."""
+    # A wrapper's PushRosNamespace lands in ros_namespace, which launch_ros prefixes
+    # to a node given no namespace of its own, as Servo is.
+    namespace = context.launch_configurations.get('ros_namespace') or ''
+    name = '/' + '/'.join(part for part in (*namespace.split('/'), SERVO_NODE) if part)
+    if name != f'/{SERVO_NODE}':
+        raise RuntimeError(
+            f'refusing to start: Servo would run as {name}, but the guard file, the '
+            f'command type call and fm-teleop all address /{SERVO_NODE}'
+        )
+
+
 def on_select_exit(replies):
     """Return the exit handler: shut the launch down unless Servo accepted the type."""
     def handler(event, context):
@@ -182,6 +197,17 @@ def _guard_file(values):
     return handle.name
 
 
+def remove_on_shutdown(path):
+    """Return an action that deletes ``path`` when the launch shuts down."""
+    # Kept until shutdown, not removed once Servo is up, so a respawned servo_node
+    # still finds it. A killed launch (SIGKILL) skips this and leaves the file in the
+    # temp dir; the next launch writes its own.
+    def unlink(event, context):
+        with contextlib.suppress(FileNotFoundError):
+            os.unlink(path)
+    return RegisterEventHandler(OnShutdown(on_shutdown=unlink))
+
+
 def _launch_setup(context):
     sim_only = LaunchConfiguration('sim_only').perform(context)
     if sim_only != 'true':
@@ -190,6 +216,7 @@ def _launch_setup(context):
             'collision checking off and must never drive a real arm.'
         )
     check_host_local(os.environ)
+    check_servo_name(context)
     command_type = LaunchConfiguration('command_type').perform(context)
     if command_type not in COMMAND_TYPES:
         raise ValueError(
@@ -217,7 +244,11 @@ def _launch_setup(context):
     # servo_sim.yaml; the guard file after it keeps the launch's own keys out of an
     # override's reach.
     params_file = LaunchConfiguration('params_file').perform(context)
-    overrides = [params_file, _guard_file(owned)] if params_file else []
+    overrides, cleanup = [], []
+    if params_file:
+        guard = _guard_file(owned)
+        overrides = [params_file, guard]
+        cleanup = [remove_on_shutdown(guard)]
 
     _logger.warning(
         'OpenArm Servo is SIM ONLY: collision checking is off. Never run it against a '
@@ -235,7 +266,7 @@ def _launch_setup(context):
             *overrides,
         ],
     )
-    return [servo, *_select_command_type(COMMAND_TYPES[command_type])]
+    return [servo, *cleanup, *_select_command_type(COMMAND_TYPES[command_type])]
 
 
 def generate_launch_description():
