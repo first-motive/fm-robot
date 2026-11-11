@@ -31,6 +31,7 @@ for every robot and variant.
 import importlib.util
 import os
 import re
+import xml.etree.ElementTree as ET
 
 import pytest
 from ament_index_python.packages import get_package_share_directory
@@ -134,6 +135,21 @@ def test_panda_visual_meshes_are_installed():
     assert uris, "no Panda visual mesh points at panda_meshes/"
     missing = [u for u in uris if not os.path.isfile(os.path.join(share, u[len(prefix):]))]
     assert not missing, f"Panda visual meshes not installed: {sorted(missing)}"
+
+
+def test_every_panda_visual_has_a_material():
+    """Each Panda visual names a material, so RViz does not fall back to red."""
+    module, share = _load_launch_module()
+    urdf = ET.fromstring(module.ROBOTS["panda"]["build_description"](share, "panda"))
+
+    visuals = [(link.get("name"), visual) for link in urdf.iter("link")
+               for visual in link.findall("visual")]
+    assert visuals, "the Panda description has no visuals"
+    # fer declares no materials of its own, so each one is the injected Franka white.
+    other = [name for name, visual in visuals
+             if visual.find("material") is None
+             or visual.find("material").get("name") != "franka_white"]
+    assert not other, f"Panda visuals without the Franka white material: {other}"
 
 
 def test_panda_home_pose_names_real_joints():

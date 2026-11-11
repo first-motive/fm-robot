@@ -278,12 +278,14 @@ _OPENARM_COLOR_RE = re.compile(r'(<material name="openarm[^"]*">\s*<color rgba="
 _VISUAL_BLOCK_RE = re.compile(r"<visual\b[^>]*>.*?</visual>", re.DOTALL)
 
 
-def _add_openarm_material(match):
-    """Inject the OpenArm material into a <visual> block that lacks one."""
-    block = match.group(0)
-    if "<material" in block:
-        return block
-    return block.replace("</visual>", _OPENARM_MATERIAL + "</visual>")
+def _add_missing_material(robot_description, material):
+    """Inject ``material`` into every <visual> block that lacks one."""
+    def add(match):
+        block = match.group(0)
+        if "<material" in block:
+            return block
+        return block.replace("</visual>", material + "</visual>")
+    return _VISUAL_BLOCK_RE.sub(add, robot_description)
 
 
 def _build_openarm(share, variant):
@@ -324,9 +326,7 @@ def _build_openarm(share, variant):
         robot_description = _OPENARM_COLOR_RE.sub(
             rf"\g<1>{_OPENARM_COLOR}\g<2>", robot_description
         )
-        robot_description = _VISUAL_BLOCK_RE.sub(
-            _add_openarm_material, robot_description
-        )
+        robot_description = _add_missing_material(robot_description, _OPENARM_MATERIAL)
     except Exception as exc:
         raise RuntimeError(
             f"Failed to process OpenArm xacro: {xacro_path}\n"
@@ -370,6 +370,14 @@ _PANDA_XACRO_REL = "robots/fer/fer.urdf.xacro"
 _PANDA_VISUAL_MESH_RE = re.compile(r"package://franka_description/meshes/([^\"']+?)\.dae")
 _PANDA_VISUAL_MESH_SUB = r"package://fm_description/panda_meshes/\1.stl"
 
+# franka_description's fer xacro gives its visuals no <material>, and the STL
+# conversion carries no colour, so RViz falls back to solid red. Every visual gets
+# Franka's off-white instead; STL holds one colour per mesh, so the dark accents on
+# the real arm are not reproduced.
+_PANDA_MATERIAL = (
+    '<material name="franka_white"><color rgba="0.9 0.9 0.9 1.0"/></material>'
+)
+
 
 def _build_panda(share, variant):
     """Process the Franka fer xacro (arm + hand) and rewrite .dae visuals to STL."""
@@ -385,7 +393,8 @@ def _build_panda(share, variant):
 
     xacro_path = os.path.join(franka_share, _PANDA_XACRO_REL)
     robot_description = xacro.process_file(xacro_path).toxml()
-    return _PANDA_VISUAL_MESH_RE.sub(_PANDA_VISUAL_MESH_SUB, robot_description)
+    robot_description = _PANDA_VISUAL_MESH_RE.sub(_PANDA_VISUAL_MESH_SUB, robot_description)
+    return _add_missing_material(robot_description, _PANDA_MATERIAL)
 
 
 # --- Registry -------------------------------------------------------------
