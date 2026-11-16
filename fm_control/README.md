@@ -39,7 +39,7 @@ urdf/
   openarm_loader.sim.urdf.xacro                         OpenArm in the loader's names, around an external description
   so101.sim.urdf.xacro   / so101.ros2_control.xacro     SO101 (5-DOF arm + gripper)
   g1.sim.urdf.xacro      / g1.ros2_control.xacro        G1-D right arm (7-DOF)
-  axol.sim.urdf.xacro    / axol.ros2_control.xacro      Axol bimanual (two 7-DOF arms, 14 joints)
+  axol.sim.urdf.xacro    / axol.ros2_control.xacro      Axol bimanual (two 7-DOF arms, 14 joints; mount:= picks the upstream URDF)
   panda.sim.urdf.xacro   / panda.ros2_control.xacro     Franka Panda (7-DOF arm + hand, sim only)
 src/
   control_node.cpp        placeholder node (unused by the backends below)

@@ -2,13 +2,18 @@
 <!--
 First Motive Axol description with backend-selectable ros2_control Systems.
 
-This merges the vendored Almond Bot Axol geometry (the flat axol.urdf installed
-into fm_description's share) and injects First Motive's <ros2_control> systems,
-selected by `sim_backend`: one per arm, or one for both arms on mujoco and gazebo.
-Axol is a fixed bimanual layout (two 7-DOF arms), so there is no preset arg — the
-variant is nominal; both arms are always emitted.
+This merges the vendored Almond Bot Axol geometry (the flat axol_<mount>.urdf
+installed into fm_description's share) and injects First Motive's <ros2_control>
+systems, selected by `sim_backend`: one per arm, or one for both arms on mujoco and
+gazebo. Axol is a fixed bimanual layout (two 7-DOF arms), so there is no preset
+arg; both arms are always emitted.
 
 Args:
+  mount         upstream mount URDF to build from (default ox_cart, the cart the
+                First Motive Axol stands on; standalone and owl carry the same arm
+                and finger joints). The ox_cart lift is a prismatic joint that no
+                <ros2_control> system claims: fm treats it as fixed, so a consumer
+                that needs its TF publishes it at 0 (fully raised, the CAD pose).
   sim_backend   mock | mujoco | gz | gazebo | isaac  (selects the System plugin;
                 gz is an alias for gazebo; no real backend yet, as Axol's CAN
                 driver is deferred, so real fails the xacro like any unknown value)
@@ -32,10 +37,14 @@ Args:
   <!-- Controllers file the Gazebo gz_ros2_control plugin loads; gazebo backend only. -->
   <xacro:arg name="gazebo_controllers_file" default=""/>
 
+  <!-- The default mount matches view_robot.launch.py's Axol default_variant. -->
+  <xacro:arg name="mount" default="ox_cart"/>
+
   <!-- Geometry: the vendored flat Axol URDF, installed into fm_description's share.
-       Its links/joints merge into this robot. Mesh paths stay package://assembly/...;
-       the fm_bringup registry rewrites them to package://fm_description at load. -->
-  <xacro:include filename="$(find fm_description)/axol_description/axol.urdf"/>
+       Its links/joints merge into this robot. Mesh paths stay relative to the
+       upstream file (meshes/<mount>/...); each consumer rewrites them to
+       package://fm_description/axol_description/meshes/ at load. -->
+  <xacro:include filename="$(find fm_description)/axol_description/axol_$(arg mount).urdf"/>
   <xacro:include filename="$(find fm_control)/urdf/axol.ros2_control.xacro"/>
 
   <!-- The simulators share one system across both arms (see axol.ros2_control.xacro);

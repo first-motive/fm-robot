@@ -71,7 +71,7 @@ docker compose -f docker/compose.yaml -f docker/compose.macos.yaml \
 ./scripts/view-robot.sh --robot so101
 ./scripts/view-robot.sh --robot openarm                  # right_arm
 ./scripts/view-robot.sh --robot openarm --variant default_bimanual
-./scripts/view-robot.sh --robot axol                     # bimanual (two 7-DOF arms)
+./scripts/view-robot.sh --robot axol                     # ox_cart mount (two 7-DOF arms + grippers)
 ./scripts/view-robot.sh --robot panda                    # Franka Panda arm + hand
 ./scripts/view-robot.sh use_rviz:=true                   # RViz (needs an X display)
 ```
@@ -93,7 +93,7 @@ variants, and mesh strategy; the viewer and launchers select by `robot:=` and
 | `g1_d` | `g1_d`, `g1_29dof_rev_1_0` | `unitree_ros` flat URDF, vendored into share | `meshes/` → `package://fm_description/<desc>/meshes/` |
 | `so101` | _(none — single description)_ | `SO-ARM100` flat URDF, vendored into share | `assets/` → `package://fm_description/so101_description/assets/` |
 | `openarm` | `right_arm`, `left_arm`, `default_bimanual`, `*_with_pinch_gripper` | `openarm_description` built ament_cmake package | visual `.dae` → `package://fm_description/openarm_meshes/*.stl` |
-| `axol` | `bimanual` | Almond Bot axol (flat URDF + STL, vendored) | `package://assembly/` → `package://fm_description/axol_description/` |
+| `axol` | `ox_cart`, `standalone`, … (upstream mount) | Almond Bot axol (flat `axol_<mount>.urdf` + STL, vendored) | `meshes/` → `package://fm_description/axol_description/meshes/` |
 | `panda` | _(none — single description)_ | `franka_description` built ament_cmake package (`robots/fer`) | visual `.dae` → `package://fm_description/panda_meshes/*.stl` |
 
 - **g1_d** — both the wheeled G1-D and the bipedal 29 DOF body are installed; pick
@@ -106,9 +106,11 @@ variants, and mesh strategy; the viewer and launchers select by `robot:=` and
   `display_openarm.launch.py`). The default `right_arm` disables the body and left
   arm. The preset's ros2_control include runs with fake hardware and is harmless
   for a view, so no disable flag is needed.
-- **axol** — the upstream (`almond-bot/axol`) ships a flat URDF + STL, not a ROS
-  package; the single `bimanual` description carries both 7-DOF arms, so
-  `--variant` is ignored.
+- **axol** — the upstream (`almond-bot/axol`) ships one flat URDF per mount
+  (`axol_<mount>.urdf`) + STL, not a ROS package; `--variant` names the mount.
+  The default `ox_cart` is the cart the First Motive Axol stands on: both 7-DOF
+  arms, a prismatic finger pair per gripper (the second finger mimics the first),
+  camera optical frames, and the cart's lift, which fm treats as fixed.
 - **panda** — Franka names the Panda `fer` (Franka Emika Robot), so the arm + hand
   joints are `fer_joint1..7` and `fer_finger_joint1..2`. Only the `robots/fer` and
   `robot_ee/franka_hand_white` visuals are converted to STL; `--variant` is

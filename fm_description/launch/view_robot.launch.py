@@ -168,60 +168,38 @@ def _build_so101(share, variant):
 
 # --- Axol -----------------------------------------------------------------
 
-# The Axol description is installed into this package's share by CMakeLists,
+# The Axol descriptions are installed into this package's share by CMakeLists,
 # sourced from the vcs-imported axol working copy (run import-externals.sh, then
-# build). It is a single flat bimanual URDF (axol.urdf) plus meshes/. The URDF
-# already references meshes as package://assembly/meshes/... (its Onshape export
-# name); we rewrite the "assembly" package to fm_description/axol_description so
-# the bridge resolves them from this package's share.
-
-# Match the yaw on the root joint (root -> base) to reorient the heading. Group 1
-# keeps the opening tag and the xyz origin; the trailing rp=".." is replaced. Any
-# whitespace between attributes is tolerated so a re-export cannot break the match.
-_AXOL_ROOT_JOINT_RE = re.compile(
-    r'(<joint name="fixed_node_to_root_joint_0"[^>]*>\s*<origin xyz="[^"]*")\s*rpy="[^"]*"'
-)
+# build). Upstream ships one flat URDF per mount, axol_<mount>.urdf, so the
+# variant names the mount; ox_cart is the cart First Motive's Axol stands on. Each
+# URDF references its meshes relative to itself (meshes/<mount>/...); we rewrite
+# them to package://fm_description/axol_description/meshes/ so the bridge resolves
+# them from this package's share. Upstream already yaws the torso to +X forward
+# on its root -> base joint, so no heading fix is applied here. The default mount
+# matches the `mount` arg of fm_control's axol.sim.urdf.xacro.
 
 
 def _build_axol(share, variant):
-    """Load the flat Axol URDF and rewrite its package:// meshes to fm_description."""
-    # Axol has a single bimanual description; the variant arg is ignored.
-    root = os.path.join(share, "axol_description")
-    urdf_path = os.path.join(root, "axol.urdf")
+    """Load the flat Axol URDF for the `variant` mount and rewrite its meshes."""
+    urdf_path = os.path.join(share, "axol_description", f"axol_{variant}.urdf")
     if not os.path.isfile(urdf_path):
         raise RuntimeError(
-            f"Axol URDF not found: {urdf_path}\n"
+            f"Axol URDF not found for mount '{variant}': {urdf_path}\n"
             "Import externals then build: ./scripts/import-externals.sh && colcon build"
         )
 
     with open(urdf_path, "r") as f:
         robot_description = f.read()
 
-    # Rewrite the exported "assembly" package to this package's share so Foxglove
-    # fetches the meshes via the bridge. The meshes live under
-    # axol_description/meshes/ (installed by CMakeLists).
     robot_description = robot_description.replace(
-        'filename="package://assembly/',
-        f'filename="package://{PKG}/axol_description/',
+        'filename="meshes/', f'filename="package://{PKG}/axol_description/meshes/'
     )
 
     # Rename the robot. The Onshape export names the URDF after its assembly
     # document ("assembly"); every other robot's URDF names itself after the
     # robot (G1_D, so101_new_calib, openarm_v20). Rename to "axol" so the
     # published /robot_description is consistent.
-    robot_description = robot_description.replace(
-        '<robot name="assembly">', '<robot name="axol">'
-    )
-
-    # Reorient the heading. The Onshape export lays the robot out facing -Y, so
-    # it renders 90 degrees clockwise about Z relative to every other robot (ROS
-    # convention is +X forward). The tree hangs off the fixed root joint
-    # `root -> base`, which the export leaves at zero yaw; set its yaw to +90
-    # degrees to rotate the whole robot anti-clockwise back to +X forward. Anchor
-    # on the joint name (not its float xyz) so a re-export cannot silently no-op.
-    return _AXOL_ROOT_JOINT_RE.sub(
-        r'\1 rpy="0 0 1.5707963267948966"', robot_description
-    )
+    return robot_description.replace('<robot name="assembly">', '<robot name="axol">')
 
 
 # --- OpenArm --------------------------------------------------------------
@@ -425,7 +403,7 @@ ROBOTS = {
     },
     "axol": {
         "label": "Almond Bot Axol",
-        "default_variant": "bimanual",
+        "default_variant": "ox_cart",
         "build_description": _build_axol,
         "bridge_params": _DEFAULT_BRIDGE_PARAMS,
         "rviz_config": "axol.rviz",
@@ -604,8 +582,9 @@ def generate_launch_description():
                 description=(
                     "Robot sub-form (empty uses the entry's default): G1 URDF "
                     "basename (g1_d, g1_29dof_rev_1_0) or OpenArm robot_preset "
-                    "(right_arm, left_arm, default_bimanual, *_with_pinch_gripper). "
-                    "Ignored for so101, axol and panda."
+                    "(right_arm, left_arm, default_bimanual, *_with_pinch_gripper), "
+                    "or Axol mount (ox_cart, standalone). "
+                    "Ignored for so101 and panda."
                 ),
             ),
             DeclareLaunchArgument(

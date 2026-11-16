@@ -88,6 +88,24 @@ def test_gazebo_hosts_controller_manager(backend):
     assert robot.find('gazebo/plugin').get('filename') == 'gz_ros2_control-system'
 
 
+def test_default_mount_is_the_ox_cart():
+    links = {link.get('name') for link in _process().findall('link')}
+    assert {'world', 'cart', 'root'} <= links
+
+
+def test_mount_arg_selects_the_upstream_urdf():
+    links = {link.get('name') for link in _process(mount='standalone').findall('link')}
+    assert 'cart' not in links
+    assert 'root' in links
+
+
+def test_meshes_stay_relative_to_the_upstream_urdf():
+    # Consumers (fm_bringup, fm_sim_bringup, view_robot) rewrite this prefix.
+    meshes = [mesh.get('filename') for mesh in _process().iter('mesh')]
+    assert meshes and all(m.startswith('meshes/') for m in meshes)
+    assert any(m.startswith('meshes/ox_cart/') for m in meshes)
+
+
 @pytest.mark.parametrize('backend', ['gazeb', 'real'])
 def test_unknown_backend_fails(backend):
     # Axol has no real hardware plugin yet, so real is as unknown as a typo.

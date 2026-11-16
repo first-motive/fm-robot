@@ -76,15 +76,17 @@ else()
     "./scripts/import-externals.sh before building to view the SO101.")
 endif()
 
-# Vendor the Almond Bot Axol arm into this package's share as axol_description so
-# its meshes resolve as package://fm_description/axol_description/meshes/... — the
-# only mesh scheme Foxglove Studio fetches through foxglove_bridge. Axol ships as
-# plain files (flat axol.urdf + meshes/*.stl) under almond_axol/kinematics/urdf,
-# vendored from the vcs-imported axol working copy. vcs names the dir after its
-# fm-robot.repos key (axol), so the source lives at external/axol/ (gitignored),
-# present only after import-externals.sh. The trailing slash on the source installs
-# its contents (URDF + meshes/) into axol_description. Guarded so a clean checkout
-# (e.g. CI without externals) still builds.
+# Vendor the Almond Bot Axol into this package's share as axol_description so its
+# meshes resolve as package://fm_description/axol_description/meshes/... — the only
+# mesh scheme Foxglove Studio fetches through foxglove_bridge. Axol ships as plain
+# files under almond_axol/kinematics/urdf: one flat URDF per mount
+# (axol_<mount>.urdf, e.g. axol_ox_cart.urdf) whose meshes are paths relative to
+# the file (meshes/<mount>/*.stl), vendored from the vcs-imported axol working
+# copy. vcs names the dir after its fm-robot.repos key (axol), so the source lives
+# at external/axol/ (gitignored), present only after import-externals.sh. The
+# trailing slash on the source installs its contents (URDFs + meshes/) into
+# axol_description. Guarded so a clean checkout (e.g. CI without externals) still
+# builds.
 set(AXOL_SRC "${FM_EXTERNAL_DIR}/axol/almond_axol/kinematics/urdf")
 if(EXISTS "${AXOL_SRC}/meshes")
   install(DIRECTORY "${AXOL_SRC}/" DESTINATION share/${PROJECT_NAME}/axol_description)
