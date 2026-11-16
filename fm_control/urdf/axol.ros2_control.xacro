@@ -64,11 +64,15 @@ robot_state_publisher derives it.
 
     <!-- Isaac Sim and the real robot both sit behind sensor_msgs/JointState topics:
          the system publishes position commands and reads position, velocity and
-         effort back. Safety, real: TopicBasedSystem seeds its commands from each
-         state interface's initial_value (the ready pose below) and publishes them
-         whenever they differ from the read state, before any controller is active.
-         The receiver (fm-axol's shim and core) must not act on a command until a
-         controller owns the joints, or the arm would drive to the ready pose. -->
+         effort back. TopicBasedSystem seeds its commands from each state
+         interface's initial_value and publishes them before any controller is
+         active. On real every position seed is NaN (see axol_joint): a joint no
+         controller owns is commanded NaN, which fm-axol's core reads as "hold",
+         and a trajectory controller that activates on a NaN command takes its
+         hold pose from the measured state. A finite seed (the ready pose) would
+         instead be sent to the arm and held by each controller on activation.
+         Isaac keeps the ready pose on purpose: Isaac Sim spawns the arms there,
+         so the seed matches the state it reports. -->
 
     <xacro:if value="${sim_backend in ['isaac', 'real']}">
       <hardware>
@@ -81,12 +85,18 @@ robot_state_publisher derives it.
 
   <!-- One joint: position command; position, velocity and effort state. The same
        set on every backend, so the controllers never change. initial_position
-       seeds the mock/mujoco starting pose (defaults 0.0). -->
-  <xacro:macro name="axol_joint" params="joint_name initial_position:=0.0">
+       seeds the mock/mujoco starting pose (defaults 0.0); with seeded false the
+       position seed is NaN instead, for the real robot (see the topic backend). -->
+  <xacro:macro name="axol_joint" params="joint_name initial_position:=0.0 seeded:=true">
     <joint name="${joint_name}">
       <command_interface name="position"/>
       <state_interface name="position">
-        <param name="initial_value">${initial_position}</param>
+        <xacro:if value="${seeded}">
+          <param name="initial_value">${initial_position}</param>
+        </xacro:if>
+        <xacro:unless value="${seeded}">
+          <param name="initial_value">nan</param>
+        </xacro:unless>
       </state_interface>
       <state_interface name="velocity">
         <param name="initial_value">0.0</param>
@@ -102,15 +112,16 @@ robot_state_publisher derives it.
        from the start (left e1 range [-0.4189, 2.618], right [-2.618, 0.4189], so the
        caller passes +/- accordingly). The finger starts at 0, the export's pose.
        Shared by the per-arm and single systems. -->
-  <xacro:macro name="axol_arm_joints" params="prefix elbow_ready">
-    <xacro:axol_joint joint_name="${prefix}s1_0"/>
-    <xacro:axol_joint joint_name="${prefix}s2_0"/>
-    <xacro:axol_joint joint_name="${prefix}s3_0"/>
-    <xacro:axol_joint joint_name="${prefix}e1_0" initial_position="${elbow_ready}"/>
-    <xacro:axol_joint joint_name="${prefix}e2_0"/>
-    <xacro:axol_joint joint_name="${prefix}w1_0"/>
-    <xacro:axol_joint joint_name="${prefix}w2_0"/>
-    <xacro:axol_joint joint_name="${prefix}finger_1_joint"/>
+  <xacro:macro name="axol_arm_joints" params="prefix elbow_ready seeded:=true">
+    <xacro:axol_joint joint_name="${prefix}s1_0" seeded="${seeded}"/>
+    <xacro:axol_joint joint_name="${prefix}s2_0" seeded="${seeded}"/>
+    <xacro:axol_joint joint_name="${prefix}s3_0" seeded="${seeded}"/>
+    <xacro:axol_joint joint_name="${prefix}e1_0" initial_position="${elbow_ready}"
+        seeded="${seeded}"/>
+    <xacro:axol_joint joint_name="${prefix}e2_0" seeded="${seeded}"/>
+    <xacro:axol_joint joint_name="${prefix}w1_0" seeded="${seeded}"/>
+    <xacro:axol_joint joint_name="${prefix}w2_0" seeded="${seeded}"/>
+    <xacro:axol_joint joint_name="${prefix}finger_1_joint" seeded="${seeded}"/>
   </xacro:macro>
 
   <!-- One <ros2_control> system for a single arm: backend hardware + its joints. -->
@@ -140,8 +151,10 @@ robot_state_publisher derives it.
           mujoco_model_path="${mujoco_model_path}"
           joint_commands_topic="${joint_commands_topic}"
           joint_states_topic="${joint_states_topic}" />
-      <xacro:axol_arm_joints prefix="left_" elbow_ready="${left_elbow_ready}"/>
-      <xacro:axol_arm_joints prefix="right_" elbow_ready="${right_elbow_ready}"/>
+      <xacro:axol_arm_joints prefix="left_" elbow_ready="${left_elbow_ready}"
+          seeded="${sim_backend != 'real'}"/>
+      <xacro:axol_arm_joints prefix="right_" elbow_ready="${right_elbow_ready}"
+          seeded="${sim_backend != 'real'}"/>
     </ros2_control>
   </xacro:macro>
 
