@@ -15,6 +15,9 @@
 """
 Process the Axol xacro for each sim_backend and check the ros2_control systems.
 
+Each arm contributes seven joints and its finger (16 in all); every joint takes a
+position command and reports position, velocity and effort.
+
 Runs against the installed share; needs the vendored axol description in
 fm_description's share (imported by fm-robot.repos).
 """
@@ -53,25 +56,70 @@ def _initial_values(robot):
     }
 
 
-@pytest.mark.parametrize('backend', ['mujoco', 'gz', 'gazebo'])
-def test_simulators_load_one_system_for_both_arms(backend):
-    # One MujocoSystemInterface is one MJCF world, and gz_ros2_control does not
-    # initialise two GazeboSimSystem systems; both get every arm in one.
+def _side_joints(side):
+    return [f'{side}_{j}_0' for j in ARM_JOINTS] + [f'{side}_finger_1_joint']
+
+
+ALL_JOINTS = set(_side_joints('left') + _side_joints('right'))
+
+
+@pytest.mark.parametrize('backend', ['mujoco', 'gz', 'gazebo', 'real'])
+def test_shared_backends_load_one_system_for_both_arms(backend):
+    # One MujocoSystemInterface is one MJCF world, gz_ros2_control does not
+    # initialise two GazeboSimSystem systems, and on real one shim owns both arms.
     systems = _systems(_process(sim_backend=backend))
     assert list(systems) == ['axol_system']
-    expected = {f'{side}_{j}_0' for side in ('left', 'right') for j in ARM_JOINTS}
-    assert len(systems['axol_system']) == 14
-    assert set(systems['axol_system']) == expected
+    assert len(systems['axol_system']) == 16
+    assert set(systems['axol_system']) == ALL_JOINTS
 
 
 @pytest.mark.parametrize('backend', ['mock', 'isaac'])
 def test_other_backends_keep_one_system_per_arm(backend):
     systems = _systems(_process(sim_backend=backend))
-    assert sorted(systems) == ['axol_left_system', 'axol_right_system']
-    assert all(len(joints) == 7 for joints in systems.values())
+    assert systems == {
+        'axol_left_system': _side_joints('left'),
+        'axol_right_system': _side_joints('right'),
+    }
 
 
-@pytest.mark.parametrize('backend', ['mujoco', 'gazebo'])
+@pytest.mark.parametrize('backend', ['mock', 'mujoco', 'gazebo', 'isaac', 'real'])
+def test_every_joint_takes_position_and_reports_effort(backend):
+    for joint in _process(sim_backend=backend).findall('ros2_control/joint'):
+        commands = [c.get('name') for c in joint.findall('command_interface')]
+        states = [s.get('name') for s in joint.findall('state_interface')]
+        assert commands == ['position'], joint.get('name')
+        assert states == ['position', 'velocity', 'effort'], joint.get('name')
+
+
+def test_mimic_fingers_are_left_to_the_description():
+    robot = _process(sim_backend='real')
+    claimed = {joint.get('name') for joint in robot.findall('ros2_control/joint')}
+    assert not {'left_finger_2_joint', 'right_finger_2_joint'} & claimed
+
+
+def test_real_backend_talks_to_the_axol_shim():
+    robot = _process(sim_backend='real')
+    hardware = robot.find('ros2_control/hardware')
+    params = {p.get('name'): p.text for p in hardware.findall('param')}
+    assert hardware.find('plugin').text == 'topic_based_ros2_control/TopicBasedSystem'
+    assert params == {
+        'joint_commands_topic': '/axol/joint_commands',
+        'joint_states_topic': '/axol/joint_states',
+    }
+
+
+def test_isaac_keeps_its_own_topics():
+    params = {
+        p.get('name'): p.text
+        for p in _process(sim_backend='isaac').findall('ros2_control/hardware/param')
+    }
+    assert params == {
+        'joint_commands_topic': '/isaac_joint_commands',
+        'joint_states_topic': '/isaac_joint_states',
+    }
+
+
+@pytest.mark.parametrize('backend', ['mujoco', 'gazebo', 'real'])
 def test_single_system_spawns_the_per_arm_pose(backend):
     single = _initial_values(_process(sim_backend=backend))
     assert single == _initial_values(_process(sim_backend='mock'))
@@ -88,8 +136,24 @@ def test_gazebo_hosts_controller_manager(backend):
     assert robot.find('gazebo/plugin').get('filename') == 'gz_ros2_control-system'
 
 
-@pytest.mark.parametrize('backend', ['gazeb', 'real'])
-def test_unknown_backend_fails(backend):
-    # Axol has no real hardware plugin yet, so real is as unknown as a typo.
-    with pytest.raises(xacro.XacroException, match=f'unknown sim_backend: {backend}'):
-        _process(sim_backend=backend)
+def test_default_mount_is_the_ox_cart():
+    links = {link.get('name') for link in _process().findall('link')}
+    assert {'world', 'cart', 'root'} <= links
+
+
+def test_mount_arg_selects_the_upstream_urdf():
+    links = {link.get('name') for link in _process(mount='standalone').findall('link')}
+    assert 'cart' not in links
+    assert 'root' in links
+
+
+def test_meshes_stay_relative_to_the_upstream_urdf():
+    # Consumers (fm_bringup, fm_sim_bringup, view_robot) rewrite this prefix.
+    meshes = [mesh.get('filename') for mesh in _process().iter('mesh')]
+    assert meshes and all(m.startswith('meshes/') for m in meshes)
+    assert any(m.startswith('meshes/ox_cart/') for m in meshes)
+
+
+def test_unknown_backend_fails():
+    with pytest.raises(xacro.XacroException, match='unknown sim_backend: gazeb'):
+        _process(sim_backend='gazeb')

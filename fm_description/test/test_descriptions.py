@@ -45,15 +45,17 @@ PKG = "fm_description"
 # unrelated match. G1 variants come from ``_G1_VARIANT_DIRS``; SO101 ignores its
 # variant; OpenArm presets mirror the validation list in ``_build_openarm`` (its
 # visual .dae meshes are rewritten to fm_description; collision STL meshes stay
-# on openarm_description by design). Panda ignores its variant and rewrites its
-# visuals the same way, onto panda_meshes/. The coverage tests below assert this list
-# stays in sync with the registry, so a robot or G1 variant added or removed
-# without updating CASES fails CI.
+# on openarm_description by design). Axol variants name the upstream mount URDF
+# (axol_<mount>.urdf); ox_cart is the default. Panda ignores its variant and
+# rewrites its visuals the same way, onto panda_meshes/. The coverage tests below
+# assert this list stays in sync with the registry, so a robot or G1 variant added
+# or removed without updating CASES fails CI.
 CASES = [
     ("g1_d", "g1_d", "package://fm_description/g1_d_description/meshes/"),
     ("g1_d", "g1_29dof_rev_1_0", "package://fm_description/g1_description/meshes/"),
     ("so101", "so101", "package://fm_description/so101_description/assets/"),
-    ("axol", "bimanual", "package://fm_description/axol_description/meshes/"),
+    ("axol", "ox_cart", "package://fm_description/axol_description/meshes/"),
+    ("axol", "standalone", "package://fm_description/axol_description/meshes/"),
     ("openarm", "right_arm", "package://fm_description/openarm_meshes/"),
     ("openarm", "left_arm", "package://fm_description/openarm_meshes/"),
     ("openarm", "default_bimanual", "package://fm_description/openarm_meshes/"),
@@ -161,3 +163,33 @@ def test_panda_home_pose_names_real_joints():
     assert pose, "panda home pose missing from installed config"
     unknown = [j for j in pose if f'<joint name="{j}"' not in urdf]
     assert not unknown, f"home pose names joints the Panda lacks: {unknown}"
+
+
+def test_axol_ox_cart_carries_arms_fingers_and_cart():
+    """The default Axol mount has 14 arm joints, a finger pair per arm, and the cart."""
+    module, share = _load_launch_module()
+    urdf = ET.fromstring(module.ROBOTS["axol"]["build_description"](share, "ox_cart"))
+
+    joints = {joint.get("name"): joint for joint in urdf.iter("joint")}
+    arm = {f"{side}_{j}_0" for side in ("left", "right")
+           for j in ("s1", "s2", "s3", "e1", "e2", "w1", "w2")}
+    assert arm <= {name for name, joint in joints.items()
+                   if joint.get("type") == "revolute"}
+    for side in ("left", "right"):
+        assert joints[f"{side}_finger_1_joint"].get("type") == "prismatic"
+        mimic = joints[f"{side}_finger_2_joint"].find("mimic")
+        assert mimic is not None and mimic.get("joint") == f"{side}_finger_1_joint"
+    assert urdf.get("name") == "axol"
+    assert "cart" in {link.get("name") for link in urdf.iter("link")}
+
+
+def test_axol_meshes_are_installed():
+    """Every rewritten Axol mesh URI names a file the build installed."""
+    module, share = _load_launch_module()
+    urdf = module.ROBOTS["axol"]["build_description"](share, "ox_cart")
+
+    prefix = "package://fm_description/"
+    uris = set(re.findall(r'filename="([^"]+)"', urdf))
+    assert uris and all(u.startswith(prefix + "axol_description/meshes/") for u in uris)
+    missing = [u for u in uris if not os.path.isfile(os.path.join(share, u[len(prefix):]))]
+    assert not missing, f"Axol meshes not installed: {sorted(missing)}"

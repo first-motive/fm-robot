@@ -39,7 +39,7 @@ urdf/
   openarm_loader.sim.urdf.xacro                         OpenArm in the loader's names, around an external description
   so101.sim.urdf.xacro   / so101.ros2_control.xacro     SO101 (5-DOF arm + gripper)
   g1.sim.urdf.xacro      / g1.ros2_control.xacro        G1-D right arm (7-DOF)
-  axol.sim.urdf.xacro    / axol.ros2_control.xacro      Axol bimanual (two 7-DOF arms, 14 joints)
+  axol.sim.urdf.xacro    / axol.ros2_control.xacro      Axol bimanual (two 7-DOF arms + fingers, 16 joints; mount:= picks the upstream URDF)
   panda.sim.urdf.xacro   / panda.ros2_control.xacro     Franka Panda (7-DOF arm + hand, sim only)
 src/
   control_node.cpp        placeholder node (unused by the backends below)
@@ -71,7 +71,7 @@ sim_backend   openarm                     so101                            g1_d 
   mujoco        mujoco_ros2_control/MujocoSystemInterface (all robots)
   gazebo        gz_ros2_control/GazeboSimSystem (all robots)
   isaac         topic_based_ros2_control/TopicBasedSystem (all robots)
-  real          openarm_hardware/OpenArmHW   feetech_ros2_driver/FeetechHardwareInterface   (no plugin — bridge)   (deferred — no CAN plugin yet)   (none — sim only)
+  real          openarm_hardware/OpenArmHW   feetech_ros2_driver/FeetechHardwareInterface   (no plugin — bridge)   topic_based_ros2_control/TopicBasedSystem   (none — sim only)
 ```
 
 The sim backends are identical across robots: only the geometry + joint set differ.
@@ -80,7 +80,7 @@ The `real` backend is where the robots diverge — see the G1-D asymmetry below.
 Every robot's `sim_backend` also accepts `gz`, the simulation stack's name for
 Gazebo; `gz` and `gazebo` select the same plugin. Any value a robot does not list
 above fails the xacro run rather than emitting a system with no `<hardware>`, so
-`real` fails for the Axol and the Panda. `urdf/sim_backend.xacro` holds that rule
+`real` fails for the Panda. `urdf/sim_backend.xacro` holds that rule
 for all five.
 
 ### OpenArm Arguments
@@ -163,17 +163,23 @@ the sim. SO101, G1-D, and Axol merge a vendored flat URDF from `fm_description`'
 share; OpenArm parses its preset-driven `openarm_description` xacro, and the Panda
 includes `franka_description`'s `fer` xacro (joints `fer_joint1..7`,
 `fer_finger_joint1..2`). The robot name
-matches each MoveIt SRDF so Servo accepts the pair. Axol is bimanual, 14 joints
-total.
+matches each MoveIt SRDF so Servo accepts the pair. Axol is bimanual, 16 joints
+total: seven per arm and one finger per gripper (`{left,right}_finger_1_joint`, in
+metres; `finger_2_joint` is a URDF mimic no system claims). Every Axol joint takes a
+position command and reports position, velocity, and effort.
 
 The bimanual robots emit one system per arm on `mock` and `isaac`
 (`openarm_left_system` + `openarm_right_system`, `axol_left_system` +
 `axol_right_system`), and OpenArm also on `real`. On `mujoco` and `gazebo` both
-arms share one system (`openarm_system`, `axol_system`). Each
-`MujocoSystemInterface` loads its own copy of the MJCF, so per-arm systems would
-step the arms in separate worlds, and gz_ros2_control never finishes initialising
+arms share one system (`openarm_system`, `axol_system`), as do the Axol's on
+`real`. Each `MujocoSystemInterface` loads its own copy of the MJCF, so per-arm
+systems would step the arms in separate worlds, and gz_ros2_control never finishes initialising
 two `GazeboSimSystem` systems. OpenArm's real hardware keeps per-arm systems
-because each one drives its own CAN arm; Axol has no real backend yet.
+because each one drives its own CAN arm. Axol's `real` backend is
+`TopicBasedSystem` on `/axol/joint_commands` and `/axol/joint_states`
+(`axol_joint_commands_topic:=`, `axol_joint_states_topic:=`), served by fm-axol's
+shim, which owns both arms' buses through one process, so one system carries all
+16 joints.
 
 Consumed by `fm_bringup`'s `sim.launch.py`, `servo.launch.py`, and `teleop.launch.py`.
 

@@ -29,12 +29,13 @@ repositories:
     type: git
     url: https://github.com/TheRobotStudio/SO-ARM100.git
     version: fda892cba81032c46c40976a48c9ceadbf40a9ca
-  # Axol (Almond Bot) description source: flat URDF + STL meshes, vendored into
-  # fm_description's share (file-vendored, not built — stays COLCON_IGNORE'd).
+  # Axol (Almond Bot) description source: one flat URDF per mount + STL meshes,
+  # vendored into fm_description's share (file-vendored, not built — stays
+  # COLCON_IGNORE'd). Pinned to the v0.2.45 release.
   external/axol:
     type: git
     url: https://github.com/almond-bot/axol.git
-    version: ca5de52e5938c6bb174782dd5d504f8d6ec07662
+    version: 021eb965551287f30364f6d753e1cbe81e509f25
   external/unitree_ros2:
     type: git
     url: https://github.com/unitreerobotics/unitree_ros2.git

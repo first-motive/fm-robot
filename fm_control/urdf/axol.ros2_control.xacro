@@ -2,39 +2,36 @@
 <!--
 First Motive backend-selectable ros2_control for the Almond Bot Axol.
 
-Axol is bimanual: two independent 7-DOF arms sharing one base. On mock and isaac
-we emit ONE <ros2_control> system per arm (axol_left_system, axol_right_system),
-each owning its 7 joints. On mujoco and gazebo both arms share one system,
-axol_system (axol_single_system), as the OpenArm's do: each MujocoSystemInterface
-loads its own copy of the MJCF, so per-arm systems would step the arms in separate
-worlds, and gz_ros2_control does not initialise two GazeboSimSystem systems. The
-arm controllers claim disjoint joint sets either way, so each arm can still be
-jogged on its own Servo node. The controllers, controller_manager, and
-command/state interface set stay identical across the sim backends; only the
+Axol is bimanual: two independent 7-DOF arms sharing one base, each with a
+gripper. On mock and isaac we emit ONE <ros2_control> system per arm
+(axol_left_system, axol_right_system), each owning its 8 joints. On mujoco,
+gazebo and real both arms share one system, axol_system (axol_single_system):
+each MujocoSystemInterface loads its own copy of the MJCF, so per-arm systems
+would step the arms in separate worlds; gz_ros2_control does not initialise two
+GazeboSimSystem systems; and on real one process (fm-axol's shim) owns both CAN
+buses, so one JointState per cycle carries every joint. The arm controllers claim
+disjoint joint sets either way, so each arm still runs on its own controllers.
+The command/state interface set stays identical across backends; only the
 <hardware> System plugin swaps, selected by `sim_backend`:
 
   mock    -> mock_components/GenericSystem               (no sim; perfect state echo)
   mujoco  -> mujoco_ros2_control/MujocoSystemInterface   (Mac daily driver, CPU)
   gazebo  -> gz_ros2_control/GazeboSimSystem             (Linux/GPU)
   isaac   -> topic_based_ros2_control/TopicBasedSystem   (Isaac Sim over ROS topics)
+  real    -> topic_based_ros2_control/TopicBasedSystem   (fm-axol's shim over ROS topics)
 
-Joint names mirror the vendored axol.urdf exactly: {left,right}_{s1,s2,s3,e1,e2,
-w1,w2}_0 (s=shoulder, e=elbow, w=wrist; the _0 suffix is the Onshape export's).
-The grippers are fixed in the URDF (no DOF), so no gripper joints appear here.
-
-The real backend is DEFERRED. Axol drives its motors over CAN (two USB-C buses,
-one per arm) and ships no ros2_control SystemInterface — so there is no `real`
-<hardware> block yet. TODO(real): author a SocketCAN ros2_control plugin (mirror
-openarm_hardware, one bus per arm) and add a `real` branch here when the physical
-arm is on hand.
+Joint names mirror the vendored upstream URDF exactly: {left,right}_{s1,s2,s3,e1,
+e2,w1,w2}_0 (s=shoulder, e=elbow, w=wrist; the _0 suffix is the Onshape export's)
+and {left,right}_finger_1_joint, the prismatic finger in metres. The second finger
+(finger_2_joint) is a URDF mimic of the first, so no system claims it:
+robot_state_publisher derives it.
 -->
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro">
 
   <!-- Emit the <hardware> block for the selected backend. mujoco_model_path is
-       consumed only by mujoco; isaac topics only by isaac. -->
+       consumed only by mujoco; the topics only by isaac and real. -->
   <xacro:macro name="axol_backend_hardware"
-      params="sim_backend mujoco_model_path
-              isaac_joint_commands_topic isaac_joint_states_topic">
+      params="sim_backend mujoco_model_path joint_commands_topic joint_states_topic">
 
     <xacro:if value="${sim_backend == 'mock'}">
       <hardware>
@@ -65,23 +62,29 @@ arm is on hand.
       </hardware>
     </xacro:if>
 
-    <xacro:if value="${sim_backend == 'isaac'}">
+    <!-- Isaac Sim and the real robot both sit behind sensor_msgs/JointState topics:
+         the system publishes position commands and reads position, velocity and
+         effort back. Safety, real: TopicBasedSystem seeds its commands from each
+         state interface's initial_value (the ready pose below) and publishes them
+         whenever they differ from the read state, before any controller is active.
+         The receiver (fm-axol's shim and core) must not act on a command until a
+         controller owns the joints, or the arm would drive to the ready pose. -->
+
+    <xacro:if value="${sim_backend in ['isaac', 'real']}">
       <hardware>
         <plugin>topic_based_ros2_control/TopicBasedSystem</plugin>
-        <param name="joint_commands_topic">${isaac_joint_commands_topic}</param>
-        <param name="joint_states_topic">${isaac_joint_states_topic}</param>
+        <param name="joint_commands_topic">${joint_commands_topic}</param>
+        <param name="joint_states_topic">${joint_states_topic}</param>
       </hardware>
     </xacro:if>
   </xacro:macro>
 
-  <!-- Sim joint: position/velocity/effort command + state, uniform across the sim
-       backends so the controller set never changes. initial_position seeds the
-       mock/mujoco starting pose (defaults 0.0). -->
-  <xacro:macro name="axol_sim_joint" params="joint_name initial_position:=0.0">
+  <!-- One joint: position command; position, velocity and effort state. The same
+       set on every backend, so the controllers never change. initial_position
+       seeds the mock/mujoco starting pose (defaults 0.0). -->
+  <xacro:macro name="axol_joint" params="joint_name initial_position:=0.0">
     <joint name="${joint_name}">
       <command_interface name="position"/>
-      <command_interface name="velocity"/>
-      <command_interface name="effort"/>
       <state_interface name="position">
         <param name="initial_value">${initial_position}</param>
       </state_interface>
@@ -94,48 +97,49 @@ arm is on hand.
     </joint>
   </xacro:macro>
 
-  <!-- One arm's 7 joints. `prefix` is left_ or right_; `elbow_ready` bends the e1
-       joint out of the straight-arm singularity so MoveIt Servo can jog from the
-       start (left e1 range [0, 2.618], right [-2.618, 0], so the caller passes +/-
-       accordingly). Shared by the per-arm and single systems. -->
+  <!-- One arm's 7 joints and its finger. `prefix` is left_ or right_; `elbow_ready`
+       bends the e1 joint out of the straight-arm singularity so MoveIt Servo can jog
+       from the start (left e1 range [-0.4189, 2.618], right [-2.618, 0.4189], so the
+       caller passes +/- accordingly). The finger starts at 0, the export's pose.
+       Shared by the per-arm and single systems. -->
   <xacro:macro name="axol_arm_joints" params="prefix elbow_ready">
-    <xacro:axol_sim_joint joint_name="${prefix}s1_0"/>
-    <xacro:axol_sim_joint joint_name="${prefix}s2_0"/>
-    <xacro:axol_sim_joint joint_name="${prefix}s3_0"/>
-    <xacro:axol_sim_joint joint_name="${prefix}e1_0" initial_position="${elbow_ready}"/>
-    <xacro:axol_sim_joint joint_name="${prefix}e2_0"/>
-    <xacro:axol_sim_joint joint_name="${prefix}w1_0"/>
-    <xacro:axol_sim_joint joint_name="${prefix}w2_0"/>
+    <xacro:axol_joint joint_name="${prefix}s1_0"/>
+    <xacro:axol_joint joint_name="${prefix}s2_0"/>
+    <xacro:axol_joint joint_name="${prefix}s3_0"/>
+    <xacro:axol_joint joint_name="${prefix}e1_0" initial_position="${elbow_ready}"/>
+    <xacro:axol_joint joint_name="${prefix}e2_0"/>
+    <xacro:axol_joint joint_name="${prefix}w1_0"/>
+    <xacro:axol_joint joint_name="${prefix}w2_0"/>
+    <xacro:axol_joint joint_name="${prefix}finger_1_joint"/>
   </xacro:macro>
 
   <!-- One <ros2_control> system for a single arm: backend hardware + its joints. -->
   <xacro:macro name="axol_arm_system"
       params="prefix sim_backend elbow_ready mujoco_model_path:=''
-              isaac_joint_commands_topic:=/isaac_joint_commands
-              isaac_joint_states_topic:=/isaac_joint_states">
+              joint_commands_topic:='' joint_states_topic:=''">
 
     <ros2_control name="axol_${prefix}system" type="system">
       <xacro:axol_backend_hardware
           sim_backend="${sim_backend}"
           mujoco_model_path="${mujoco_model_path}"
-          isaac_joint_commands_topic="${isaac_joint_commands_topic}"
-          isaac_joint_states_topic="${isaac_joint_states_topic}" />
+          joint_commands_topic="${joint_commands_topic}"
+          joint_states_topic="${joint_states_topic}" />
 
       <xacro:axol_arm_joints prefix="${prefix}" elbow_ready="${elbow_ready}"/>
     </ros2_control>
   </xacro:macro>
 
-  <!-- One <ros2_control> system holding both arms, for mujoco and gazebo. The
+  <!-- One <ros2_control> system holding both arms, for mujoco, gazebo and real. The
        elbow_ready values match the per-arm systems' in axol.sim.urdf.xacro. -->
   <xacro:macro name="axol_single_system"
-      params="sim_backend left_elbow_ready right_elbow_ready mujoco_model_path:=''">
+      params="sim_backend left_elbow_ready right_elbow_ready mujoco_model_path:=''
+              joint_commands_topic:='' joint_states_topic:=''">
     <ros2_control name="axol_system" type="system">
-      <!-- No isaac topics: only the mujoco and gazebo hardware use this system. -->
       <xacro:axol_backend_hardware
           sim_backend="${sim_backend}"
           mujoco_model_path="${mujoco_model_path}"
-          isaac_joint_commands_topic=""
-          isaac_joint_states_topic="" />
+          joint_commands_topic="${joint_commands_topic}"
+          joint_states_topic="${joint_states_topic}" />
       <xacro:axol_arm_joints prefix="left_" elbow_ready="${left_elbow_ready}"/>
       <xacro:axol_arm_joints prefix="right_" elbow_ready="${right_elbow_ready}"/>
     </ros2_control>

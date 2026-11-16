@@ -2,16 +2,22 @@
 <!--
 First Motive Axol description with backend-selectable ros2_control Systems.
 
-This merges the vendored Almond Bot Axol geometry (the flat axol.urdf installed
-into fm_description's share) and injects First Motive's <ros2_control> systems,
-selected by `sim_backend`: one per arm, or one for both arms on mujoco and gazebo.
-Axol is a fixed bimanual layout (two 7-DOF arms), so there is no preset arg — the
-variant is nominal; both arms are always emitted.
+This merges the vendored Almond Bot Axol geometry (the flat axol_<mount>.urdf
+installed into fm_description's share) and injects First Motive's <ros2_control>
+systems, selected by `sim_backend`: one per arm, or one for both arms on mujoco,
+gazebo and real. Each arm contributes its 7 joints and its finger. Axol is a fixed
+bimanual layout (two 7-DOF arms), so there is no preset arg; both arms are always
+emitted.
 
 Args:
-  sim_backend   mock | mujoco | gz | gazebo | isaac  (selects the System plugin;
-                gz is an alias for gazebo; no real backend yet, as Axol's CAN
-                driver is deferred, so real fails the xacro like any unknown value)
+  mount         upstream mount URDF to build from (default ox_cart, the cart the
+                First Motive Axol stands on; standalone and owl carry the same arm
+                and finger joints). The ox_cart lift is a prismatic joint that no
+                <ros2_control> system claims: fm treats it as fixed, so a consumer
+                that needs its TF publishes it at 0 (fully raised, the CAD pose).
+  sim_backend   mock | mujoco | gz | gazebo | isaac | real  (selects the System
+                plugin; gz is an alias for gazebo; real reaches the robot through
+                fm-axol's shim over the axol_joint_*_topic topics)
   mujoco_model  MJCF the mujoco backend loads; injected by the fm_bringup registry
                 from fm_sim_models when sim_backend=mujoco (empty default otherwise)
 -->
@@ -22,9 +28,15 @@ Args:
   <xacro:include filename="$(find fm_control)/urdf/sim_backend.xacro"/>
   <xacro:fm_sim_backend
       requested="$(arg sim_backend)"
-      supported="${['mock', 'mujoco', 'gazebo', 'isaac']}"/>
+      supported="${['mock', 'mujoco', 'gazebo', 'isaac', 'real']}"/>
   <xacro:arg name="isaac_joint_commands_topic" default="/isaac_joint_commands"/>
   <xacro:arg name="isaac_joint_states_topic" default="/isaac_joint_states"/>
+  <!-- isaac reads the isaac_* topic args (per-arm systems); real reads the axol_*
+       ones (the single system). The other backends ignore both. -->
+  <!-- The real backend's topics, served by fm-axol's shim (sensor_msgs/JointState
+       both ways: position commands out, position/velocity/effort state in). -->
+  <xacro:arg name="axol_joint_commands_topic" default="/axol/joint_commands"/>
+  <xacro:arg name="axol_joint_states_topic" default="/axol/joint_states"/>
   <!-- MujocoSystemInterface reads the MJCF from a URDF <param>. The path is owned by
        fm_sim_models and injected by the fm_bringup registry; the default stays empty. -->
   <xacro:arg name="mujoco_model" default=""/>
@@ -32,18 +44,22 @@ Args:
   <!-- Controllers file the Gazebo gz_ros2_control plugin loads; gazebo backend only. -->
   <xacro:arg name="gazebo_controllers_file" default=""/>
 
+  <!-- The default mount matches view_robot.launch.py's Axol default_variant. -->
+  <xacro:arg name="mount" default="ox_cart"/>
+
   <!-- Geometry: the vendored flat Axol URDF, installed into fm_description's share.
-       Its links/joints merge into this robot. Mesh paths stay package://assembly/...;
-       the fm_bringup registry rewrites them to package://fm_description at load. -->
-  <xacro:include filename="$(find fm_description)/axol_description/axol.urdf"/>
+       Its links/joints merge into this robot. Mesh paths stay relative to the
+       upstream file (meshes/<mount>/...); each consumer rewrites them to
+       package://fm_description/axol_description/meshes/ at load. -->
+  <xacro:include filename="$(find fm_description)/axol_description/axol_$(arg mount).urdf"/>
   <xacro:include filename="$(find fm_control)/urdf/axol.ros2_control.xacro"/>
 
-  <!-- The simulators share one system across both arms (see axol.ros2_control.xacro);
-       mock and isaac keep one system per arm. -->
-  <xacro:property name="single_system_backends" value="${['mujoco', 'gazebo']}"/>
+  <!-- The simulators and the real robot share one system across both arms (see
+       axol.ros2_control.xacro); mock and isaac keep one system per arm. -->
+  <xacro:property name="single_system_backends" value="${['mujoco', 'gazebo', 'real']}"/>
 
   <!-- elbow_ready bends each e1 joint out of the straight-arm singularity, within
-       that arm's limit (left e1 [0, 2.618], right [-2.618, 0]). -->
+       that arm's limit (left e1 [-0.4189, 2.618], right [-2.618, 0.4189]). -->
   <xacro:property name="left_elbow_ready" value="1.0"/>
   <xacro:property name="right_elbow_ready" value="-1.0"/>
 
@@ -52,7 +68,9 @@ Args:
         sim_backend="${backend}"
         left_elbow_ready="${left_elbow_ready}"
         right_elbow_ready="${right_elbow_ready}"
-        mujoco_model_path="${mujoco_model_path}"/>
+        mujoco_model_path="${mujoco_model_path}"
+        joint_commands_topic="$(arg axol_joint_commands_topic)"
+        joint_states_topic="$(arg axol_joint_states_topic)"/>
   </xacro:if>
   <xacro:unless value="${backend in single_system_backends}">
     <xacro:axol_arm_system
@@ -60,15 +78,15 @@ Args:
         sim_backend="${backend}"
         elbow_ready="${left_elbow_ready}"
         mujoco_model_path="${mujoco_model_path}"
-        isaac_joint_commands_topic="$(arg isaac_joint_commands_topic)"
-        isaac_joint_states_topic="$(arg isaac_joint_states_topic)"/>
+        joint_commands_topic="$(arg isaac_joint_commands_topic)"
+        joint_states_topic="$(arg isaac_joint_states_topic)"/>
     <xacro:axol_arm_system
         prefix="right_"
         sim_backend="${backend}"
         elbow_ready="${right_elbow_ready}"
         mujoco_model_path="${mujoco_model_path}"
-        isaac_joint_commands_topic="$(arg isaac_joint_commands_topic)"
-        isaac_joint_states_topic="$(arg isaac_joint_states_topic)"/>
+        joint_commands_topic="$(arg isaac_joint_commands_topic)"
+        joint_states_topic="$(arg isaac_joint_states_topic)"/>
   </xacro:unless>
 
   <!-- Gazebo hosts the controller_manager inside the sim via this world plugin,
