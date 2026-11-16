@@ -22,6 +22,7 @@ Runs against the installed share; needs the vendored axol description in
 fm_description's share (imported by fm-robot.repos).
 """
 
+import math
 import os
 import xml.etree.ElementTree as ET
 
@@ -119,12 +120,31 @@ def test_isaac_keeps_its_own_topics():
     }
 
 
-@pytest.mark.parametrize('backend', ['mujoco', 'gazebo', 'real'])
+@pytest.mark.parametrize('backend', ['mujoco', 'gazebo'])
 def test_single_system_spawns_the_per_arm_pose(backend):
     single = _initial_values(_process(sim_backend=backend))
     assert single == _initial_values(_process(sim_backend='mock'))
     assert single['left_e1_0']['position'] == 1.0
     assert single['right_e1_0']['position'] == -1.0
+
+
+@pytest.mark.parametrize('backend', ['mock', 'mujoco', 'gazebo', 'isaac'])
+def test_sim_backends_seed_the_ready_pose(backend):
+    seeds = _initial_values(_process(sim_backend=backend))
+    assert not any(math.isnan(v['position']) for v in seeds.values())
+    assert seeds['left_e1_0']['position'] == 1.0
+    assert seeds['right_e1_0']['position'] == -1.0
+
+
+def test_real_seeds_position_nan():
+    # TopicBasedSystem seeds its commands from these values and publishes them
+    # before any controller is active; NaN is "hold" to fm-axol's core.
+    seeds = _initial_values(_process(sim_backend='real'))
+    assert len(seeds) == 16
+    for name, values in seeds.items():
+        assert math.isnan(values['position']), name
+        assert values['velocity'] == 0.0
+        assert values['effort'] == 0.0
 
 
 @pytest.mark.parametrize('backend', ['gz', 'gazebo'])
