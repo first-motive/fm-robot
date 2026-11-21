@@ -111,6 +111,8 @@ variants, and mesh strategy; the viewer and launchers select by `robot:=` and
   The default `ox_cart` is the cart the First Motive Axol stands on: both 7-DOF
   arms, a prismatic finger pair per gripper (the second finger mimics the first),
   camera optical frames, and the cart's lift, which fm treats as fixed.
+  It has no grasp frame: `urdf/axol_grasp_frames.xacro` adds one per gripper, which
+  `fm_control`'s `axol.sim.urdf.xacro` includes with `emit_grasp_frame:=true`.
 - **panda** — Franka names the Panda `fer` (Franka Emika Robot), so the arm + hand
   joints are `fer_joint1..7` and `fer_finger_joint1..2`. Only the `robots/fer` and
   `robot_ee/franka_hand_white` visuals are converted to STL; `--variant` is

@@ -181,6 +181,11 @@ because each one drives its own CAN arm. Axol's `real` backend is
 shim, which owns both arms' buses through one process, so one system carries all
 16 joints.
 
+The Axol's `emit_grasp_frame` also defaults to `false`. Pass `emit_grasp_frame:=true`
+for the fm-skills `axol` robot profile, whose `ee_frame` is `<side>_grasp_frame`: it adds
+that frame to each gripper from `fm_description/urdf/axol_grasp_frames.xacro`. In the
+description `robot_state_publisher` latches, it is part of the one `/tf_static` sample.
+
 Consumed by `fm_bringup`'s `sim.launch.py`, `servo.launch.py`, and `teleop.launch.py`.
 
 ## G1-D Real Arm: a Bridge, Not a ros2_control Plugin

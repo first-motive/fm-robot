@@ -177,3 +177,22 @@ def test_meshes_stay_relative_to_the_upstream_urdf():
 def test_unknown_backend_fails():
     with pytest.raises(xacro.XacroException, match='unknown sim_backend: gazeb'):
         _process(sim_backend='gazeb')
+
+
+def test_grasp_frames_are_left_out_by_default():
+    links = {link.get('name') for link in _process().findall('link')}
+    assert not {'left_grasp_frame', 'right_grasp_frame'} & links
+
+
+@pytest.mark.parametrize('side', ['left', 'right'])
+def test_emit_grasp_frame_hangs_a_tcp_from_each_gripper(side):
+    # fm-skills' Axol profile names <side>_grasp_frame its ee_frame, and fm-axol's
+    # robot_state_publisher latches it with the rest of the tree.
+    robot = _process(sim_backend='real', emit_grasp_frame='true')
+    joint = next(j for j in robot.findall('joint') if j.get('name') == f'{side}_grasp_frame_joint')
+    assert joint.get('type') == 'fixed'
+    assert joint.find('parent').get('link') == f'{side}_gripper'
+    assert joint.find('child').get('link') == f'{side}_grasp_frame'
+    origin = joint.find('origin')
+    assert [float(v) for v in origin.get('xyz').split()] == [0.0, 0.0, -0.13]
+    assert [float(v) for v in origin.get('rpy').split()] == pytest.approx([math.pi, 0.0, -math.pi / 2])
