@@ -20,6 +20,9 @@ Args:
                 fm-axol's shim over the axol_joint_*_topic topics)
   mujoco_model  MJCF the mujoco backend loads; injected by the fm_bringup registry
                 from fm_sim_models when sim_backend=mujoco (empty default otherwise)
+  emit_grasp_frame  add <side>_grasp_frame to each gripper (fm_description's
+                axol_grasp_frames.xacro), the fm-skills robot profile's ee_frame
+                (default false, as on the OpenArm)
 -->
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="axol">
 
@@ -53,6 +56,13 @@ Args:
        package://fm_description/axol_description/meshes/ at load. -->
   <xacro:include filename="$(find fm_description)/axol_description/axol_$(arg mount).urdf"/>
   <xacro:include filename="$(find fm_control)/urdf/axol.ros2_control.xacro"/>
+
+  <xacro:arg name="emit_grasp_frame" default="false"/>
+  <xacro:if value="$(arg emit_grasp_frame)">
+    <xacro:include filename="$(find fm_description)/urdf/axol_grasp_frames.xacro"/>
+    <xacro:axol_grasp_frame side="right"/>
+    <xacro:axol_grasp_frame side="left"/>
+  </xacro:if>
 
   <!-- The simulators and the real robot share one system across both arms (see
        axol.ros2_control.xacro); mock and isaac keep one system per arm. -->

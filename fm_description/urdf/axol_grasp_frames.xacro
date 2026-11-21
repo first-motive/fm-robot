@@ -1,0 +1,31 @@
+<?xml version="1.0"?>
+<!--
+The Axol's grasp frames (TCPs), which Almond's flat axol_<mount>.urdf does not have.
+
+fm-skills' Axol robot profile names <side>_grasp_frame as its ee_frame. The frame sits
+between the fingertips. Its z is the approach axis, out of the fingers, its y is the axis
+the fingers close along, and its +x is the wrist camera's side, as on the OpenArm's
+grasp_frame. In <side>_gripper the fingers close along x and point down -z, and the wrist
+camera sits at -y, which the -90 degree yaw maps to +x. Each finger_1 joint sits at
+z -0.0575 and its collision box reaches 0.092 m further, so 0.13 m is 2 cm short of the
+tips: an estimate from the URDF geometry until a marker checks it.
+
+fm_control's axol.sim.urdf.xacro adds both with emit_grasp_frame:=true, so
+robot_state_publisher latches them with the rest of the tree. fm-skills' MoveIt
+description (axol_skills_config) includes this file too, so planning and TF agree.
+
+Args:
+  side  right | left
+-->
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <xacro:macro name="axol_grasp_frame" params="side">
+    <link name="${side}_grasp_frame"/>
+    <joint name="${side}_grasp_frame_joint" type="fixed">
+      <parent link="${side}_gripper"/>
+      <child link="${side}_grasp_frame"/>
+      <origin xyz="0 0 -0.13" rpy="${pi} 0 ${-pi / 2}"/>
+    </joint>
+  </xacro:macro>
+
+</robot>
