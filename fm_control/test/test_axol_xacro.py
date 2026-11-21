@@ -195,4 +195,5 @@ def test_emit_grasp_frame_hangs_a_tcp_from_each_gripper(side):
     assert joint.find('child').get('link') == f'{side}_grasp_frame'
     origin = joint.find('origin')
     assert [float(v) for v in origin.get('xyz').split()] == [0.0, 0.0, -0.13]
-    assert [float(v) for v in origin.get('rpy').split()] == pytest.approx([math.pi, 0.0, -math.pi / 2])
+    rpy = [float(v) for v in origin.get('rpy').split()]
+    assert rpy == pytest.approx([math.pi, 0.0, -math.pi / 2])
