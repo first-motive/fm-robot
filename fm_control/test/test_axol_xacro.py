@@ -15,8 +15,9 @@
 """
 Process the Axol xacro for each sim_backend and check the ros2_control systems.
 
-Each arm contributes seven joints and its finger (16 in all); every joint takes a
-position command and reports position, velocity and effort.
+Each arm contributes seven joints and its finger (16 in all); every arm joint takes a
+position command and reports position, velocity and effort. On the real backend the
+Ox cart's lift adds a state-only system.
 
 Runs against the installed share; needs the vendored axol description in
 fm_description's share (imported by fm-robot.repos).
@@ -40,11 +41,18 @@ def _process(**mappings):
     return ET.fromstring(xacro.process_file(path, mappings=mappings).toxml())
 
 
+LIFT_SYSTEM = 'axol_lift_system'
+
+
 def _systems(robot):
     return {
         system.get('name'): [joint.get('name') for joint in system.findall('joint')]
         for system in robot.findall('ros2_control')
     }
+
+
+def _arm_systems(robot):
+    return [s for s in robot.findall('ros2_control') if s.get('name') != LIFT_SYSTEM]
 
 
 def _initial_values(robot):
@@ -53,7 +61,8 @@ def _initial_values(robot):
             state.get('name'): float(state.find("param[@name='initial_value']").text)
             for state in joint.findall('state_interface')
         }
-        for joint in robot.findall('ros2_control/joint')
+        for system in _arm_systems(robot)
+        for joint in system.findall('joint')
     }
 
 
@@ -68,10 +77,11 @@ ALL_JOINTS = set(_side_joints('left') + _side_joints('right'))
 def test_shared_backends_load_one_system_for_both_arms(backend):
     # One MujocoSystemInterface is one MJCF world, gz_ros2_control does not
     # initialise two GazeboSimSystem systems, and on real one shim owns both arms.
-    systems = _systems(_process(sim_backend=backend))
-    assert list(systems) == ['axol_system']
-    assert len(systems['axol_system']) == 16
-    assert set(systems['axol_system']) == ALL_JOINTS
+    (system,) = _arm_systems(_process(sim_backend=backend))
+    joints = [joint.get('name') for joint in system.findall('joint')]
+    assert system.get('name') == 'axol_system'
+    assert len(joints) == 16
+    assert set(joints) == ALL_JOINTS
 
 
 @pytest.mark.parametrize('backend', ['mock', 'isaac'])
@@ -84,12 +94,13 @@ def test_other_backends_keep_one_system_per_arm(backend):
 
 
 @pytest.mark.parametrize('backend', ['mock', 'mujoco', 'gazebo', 'isaac', 'real'])
-def test_every_joint_takes_position_and_reports_effort(backend):
-    for joint in _process(sim_backend=backend).findall('ros2_control/joint'):
-        commands = [c.get('name') for c in joint.findall('command_interface')]
-        states = [s.get('name') for s in joint.findall('state_interface')]
-        assert commands == ['position'], joint.get('name')
-        assert states == ['position', 'velocity', 'effort'], joint.get('name')
+def test_every_arm_joint_takes_position_and_reports_effort(backend):
+    for system in _arm_systems(_process(sim_backend=backend)):
+        for joint in system.findall('joint'):
+            commands = [c.get('name') for c in joint.findall('command_interface')]
+            states = [s.get('name') for s in joint.findall('state_interface')]
+            assert commands == ['position'], joint.get('name')
+            assert states == ['position', 'velocity', 'effort'], joint.get('name')
 
 
 def test_mimic_fingers_are_left_to_the_description():
@@ -100,7 +111,7 @@ def test_mimic_fingers_are_left_to_the_description():
 
 def test_real_backend_talks_to_the_axol_shim():
     robot = _process(sim_backend='real')
-    hardware = robot.find('ros2_control/hardware')
+    hardware = robot.find("ros2_control[@name='axol_system']/hardware")
     params = {p.get('name'): p.text for p in hardware.findall('param')}
     assert hardware.find('plugin').text == 'topic_based_ros2_control/TopicBasedSystem'
     assert params == {
@@ -145,6 +156,50 @@ def test_real_seeds_position_nan():
         assert math.isnan(values['position']), name
         assert values['velocity'] == 0.0
         assert values['effort'] == 0.0
+
+
+def _lift(robot):
+    return robot.find(f"ros2_control[@name='{LIFT_SYSTEM}']")
+
+
+def test_real_lift_is_a_state_only_mock_at_the_given_position():
+    # The lift has no encoder and never moves while the stack runs: a mock system
+    # reports the position read at stack start, and no controller commands it.
+    lift = _lift(_process(sim_backend='real', lift_position='0.15'))
+    assert lift.find('hardware/plugin').text == 'mock_components/GenericSystem'
+    (joint,) = lift.findall('joint')
+    assert joint.get('name') == 'lift'
+    assert joint.findall('command_interface') == []
+    states = {
+        s.get('name'): float(s.find("param[@name='initial_value']").text)
+        for s in joint.findall('state_interface')
+    }
+    assert states == {'position': 0.15, 'velocity': 0.0, 'effort': 0.0}
+
+
+def test_real_lift_defaults_to_fully_raised():
+    joint = _lift(_process(sim_backend='real')).find('joint')
+    assert float(joint.find("state_interface[@name='position']/param").text) == 0.0
+
+
+@pytest.mark.parametrize('backend', ['mock', 'mujoco', 'gazebo', 'isaac'])
+def test_sim_backends_leave_the_lift_unclaimed(backend):
+    assert _lift(_process(sim_backend=backend, lift_position='0.15')) is None
+
+
+@pytest.mark.parametrize('position', ['-0.01', '0.5', '4.572', 'nan', 'inf'])
+def test_a_lift_position_outside_its_travel_fails(position):
+    with pytest.raises(xacro.XacroException, match='lift_position out of range'):
+        _process(sim_backend='real', lift_position=position)
+
+
+def test_a_non_numeric_lift_position_fails():
+    with pytest.raises(xacro.XacroException):
+        _process(sim_backend='real', lift_position='<param/>')
+
+
+def test_a_mount_without_a_lift_emits_no_lift_system():
+    assert _lift(_process(sim_backend='real', mount='standalone')) is None
 
 
 @pytest.mark.parametrize('backend', ['gz', 'gazebo'])

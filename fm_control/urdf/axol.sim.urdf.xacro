@@ -12,9 +12,13 @@ emitted.
 Args:
   mount         upstream mount URDF to build from (default ox_cart, the cart the
                 First Motive Axol stands on; standalone and owl carry the same arm
-                and finger joints). The ox_cart lift is a prismatic joint that no
-                <ros2_control> system claims: fm treats it as fixed, so a consumer
-                that needs its TF publishes it at 0 (fully raised, the CAD pose).
+                and finger joints). The ox_cart lift is a prismatic joint. On the
+                real backend a mock system (axol_lift_system) reports it at
+                lift_position; on every other backend no system claims it, so fm
+                treats it as fixed at 0 (fully raised, the CAD pose).
+  lift_position the ox_cart lift's joint position in metres, real backend only
+                (default 0, fully raised; 0.4572 fully lowered). fm-axol sets it
+                at stack start from the operator's sticker reading.
   sim_backend   mock | mujoco | gz | gazebo | isaac | real  (selects the System
                 plugin; gz is an alias for gazebo; real reaches the robot through
                 fm-axol's shim over the axol_joint_*_topic topics)
@@ -49,6 +53,8 @@ Args:
 
   <!-- The default mount matches view_robot.launch.py's Axol default_variant. -->
   <xacro:arg name="mount" default="ox_cart"/>
+  <!-- The ox_cart lift's position in metres, real backend only (see the header). -->
+  <xacro:arg name="lift_position" default="0.0"/>
 
   <!-- Geometry: the vendored flat Axol URDF, installed into fm_description's share.
        Its links/joints merge into this robot. Mesh paths stay relative to the
@@ -98,6 +104,12 @@ Args:
         joint_commands_topic="$(arg isaac_joint_commands_topic)"
         joint_states_topic="$(arg isaac_joint_states_topic)"/>
   </xacro:unless>
+
+  <!-- Only the ox_cart mount has a lift. The simulators leave it unclaimed (fixed
+       at 0) until they model it. -->
+  <xacro:if value="${backend == 'real' and '$(arg mount)' == 'ox_cart'}">
+    <xacro:axol_lift_system lift_position="$(arg lift_position)"/>
+  </xacro:if>
 
   <!-- Gazebo hosts the controller_manager inside the sim via this world plugin,
        which loads the controllers.yaml. Emitted only for the gazebo backend. -->
