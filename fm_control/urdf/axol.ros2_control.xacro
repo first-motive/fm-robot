@@ -158,4 +158,36 @@ robot_state_publisher derives it.
     </ros2_control>
   </xacro:macro>
 
+  <!-- The Ox cart's lift, as a state source only, for the real robot. The lift is
+       set by hand with an allen key: it has no encoder and never moves while the
+       stack runs, so a mock system reporting the position read at stack start
+       (lift_position, metres, 0 fully raised) stands in for a sensor. It takes no
+       command, so no controller claims it, and joint_state_broadcaster publishes it
+       on /joint_states beside the arms, where robot_state_publisher and MoveIt read
+       it. A value outside the joint's limit (0 to 0.4572 m, the vendored URDF's) fails
+       the xacro, so a typo never reaches TF or the planning scene; NaN fails it too. -->
+  <xacro:macro name="axol_lift_system" params="lift_position">
+    <xacro:property name="lift_m" value="${float(lift_position)}"/>
+    <xacro:unless value="${0.0 &lt;= lift_m &lt;= 0.4572}">
+      ${xacro.fatal('lift_position out of range: ' + str(lift_position)
+                    + ' (expected 0 to 0.4572 m)')}
+    </xacro:unless>
+    <ros2_control name="axol_lift_system" type="system">
+      <hardware>
+        <plugin>mock_components/GenericSystem</plugin>
+      </hardware>
+      <joint name="lift">
+        <state_interface name="position">
+          <param name="initial_value">${lift_m}</param>
+        </state_interface>
+        <state_interface name="velocity">
+          <param name="initial_value">0.0</param>
+        </state_interface>
+        <state_interface name="effort">
+          <param name="initial_value">0.0</param>
+        </state_interface>
+      </joint>
+    </ros2_control>
+  </xacro:macro>
+
 </robot>
